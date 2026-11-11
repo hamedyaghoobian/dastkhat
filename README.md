@@ -62,7 +62,7 @@ Ganjoor's AI paraphrases) is gitignored.
 ### Women's Worlds in Qajar Iran (local only)
 
 `node tools/fetch-wwqi.mjs` imports the letters in [Women's Worlds in Qajar Iran](http://www.qajarwomen.org) (WWQI,
-Harvard) that have a typed Persian transcription: 872 items listed, of which 870 have usable text. Each item's
+Harvard) that have a typed Persian transcription: 872 items listed. Two have no usable text and 36 are in English or French, which leaves 834 Persian letters. Each item's
 «محدودیت» field is kept with the letter and shown beside it. Most say «بدون محدودیت»; the others are holders' conditions,
 such as naming the holding library when publishing (the Majlis Library for 288 of them) or asking before commercial use. The importer is resumable: the archive's
 search server is slow and sometimes down, so every request has a timeout, retries and a pause, and every page fetched
