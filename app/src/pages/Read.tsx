@@ -1,4 +1,4 @@
-import { byId } from '../lib/letters';
+import { byId, rightsNote } from '../lib/letters';
 
 export function Read({ id }: { id: string }) {
   const l = byId(id);
@@ -10,10 +10,13 @@ export function Read({ id }: { id: string }) {
       <h1>{l.title}</h1>
       <p className="hint">{l.author} · گیرنده: {l.recipient ?? 'در منبع نیامده'} · {l.period}</p>
       <p><a className="btn primary" href={`#/letter/${l.id}`} style={{ textDecoration: 'none' }}>به خط دست بنویس</a></p>
-      <div className="fulltext">{l.text}</div>
+      {l.summary && <p>{l.summary}</p>}
+      {l.people && l.people.length > 0 && <p className="hint">افراد: {l.people.join('، ')}</p>}
+      <div className="fulltext">{l.transcript ?? l.text}</div>
+      {l.transcript && l.transcript !== l.text && <p className="hint">متن بالا همان است که آرشیو تایپ کرده، با افزوده‌های ویراستار در [ ]. دست، آنچه را نویسنده نوشته می‌نویسد: بی‌افزوده‌ها و بی‌تصحیح‌ها.</p>}
       <h2>منبع و حقوق</h2>
       <p><a href={l.source.url} target="_blank" rel="noreferrer">{l.source.name}</a>{l.source.edition && <>، به نقل از {l.source.edition}</>}.</p>
-      <p>نویسنده در ۱۲۵۱ ق / ۱۸۳۵ م درگذشته است و متن نامه‌ها در مالکیت عمومی است. متن تایپی را داوطلبان گنجور فراهم کرده‌اند؛ یادداشت‌ها و بازنویسی‌های ماشینی گنجور به کار نرفته است.</p>
+      <p>{rightsNote(l)}</p>
       <h2>ارجاع</h2>
       <p className="hint">{cite}</p>
     </main>

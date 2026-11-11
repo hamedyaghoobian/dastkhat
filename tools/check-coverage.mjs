@@ -2,7 +2,7 @@
 // app does (same clean-up, rtl / Arab / fa) and fails on any glyph that has ink in the font but
 // neither paths nor dots in the skeleton library.
 //   node tools/check-coverage.mjs
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const require = createRequire(new URL('../app/package.json', import.meta.url));
 const hb = await require('harfbuzzjs');
@@ -10,6 +10,9 @@ const hb = await require('harfbuzzjs');
 const font = hb.createFont(hb.createFace(hb.createBlob(readFileSync(new URL('../app/public/fonts/Vazirmatn-Thin.ttf', import.meta.url))), 0));
 const sk = JSON.parse(readFileSync(new URL('../app/src/engine/data/skeletons.json', import.meta.url), 'utf8'));
 const letters = JSON.parse(readFileSync(new URL('../content/letters.json', import.meta.url), 'utf8'));
+// plus any local-only letters (content/local/*.json, e.g. WWQI), which the app also loads when present
+const localDir = new URL('../content/local/', import.meta.url);
+if (existsSync(localDir)) for (const f of readdirSync(localDir).filter((f) => f.endsWith('.json'))) letters.push(...JSON.parse(readFileSync(new URL(f, localDir), 'utf8')));
 
 // keep in step with normalisePersian() in app/src/engine/shaper.ts
 const normalise = (s) => s

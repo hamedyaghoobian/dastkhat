@@ -5,7 +5,7 @@ import { compose } from '../engine/compose';
 import { INKS, PENS, makeHand, type HandOverrides, type PenKind } from '../engine/hand';
 import { newSeed, seedName } from '../engine/rng';
 import { normalisePersian, type ShapedGlyph } from '../engine/shaper';
-import { LETTERS, byId, excerpt, faNum, pickNext } from '../lib/letters';
+import { LETTERS, byId, excerpt, faNum, pickNext, rightsNote } from '../lib/letters';
 import { MARGIN, PAPERS, exportPNG, type PaperId } from '../lib/paper';
 import { navigate, type Route } from '../lib/route';
 
@@ -122,12 +122,14 @@ export function Desk({ route, shape }: Props) {
             <dt>نویسنده</dt><dd>{letter.author}</dd>
             <dt>گیرنده</dt><dd>{letter.recipient ?? 'در منبع نیامده'}</dd>
             {letter.onBehalfOf && <><dt>یادداشت</dt><dd>{letter.onBehalfOf}</dd></>}
+            {letter.summary && <><dt>دربارهٔ نامه</dt><dd>{letter.summary}</dd></>}
+            {letter.people && letter.people.length > 0 && <><dt>افراد</dt><dd>{letter.people.join('، ')}</dd></>}
             <dt>زمان</dt><dd>{letter.period}</dd>
             <dt>منبع</dt><dd><a href={letter.source.url} target="_blank" rel="noreferrer">{letter.source.name}</a>{letter.source.edition && <> (به نقل از {letter.source.edition})</>}</dd>
           </dl>
           <p className="note">
             {cut ? <>این آغاز نامه است؛ <a href={`#/read/${letter.id}`}>متن کامل</a> را بخوانید. </> : <><a href={`#/read/${letter.id}`}>متن تایپی</a>. </>}
-            نویسنده در ۱۸۳۵ م درگذشته و متن در مالکیت عمومی است. خطی که می‌بینید از او نیست: دست نویسنده‌ای است که هرگز نبوده.
+            {rightsNote(letter)} خطی که می‌بینید از نویسندهٔ نامه نیست: دست نویسنده‌ای است که هرگز نبوده.
           </p>
         </div>
 

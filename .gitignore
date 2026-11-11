@@ -3,3 +3,5 @@ app/dist/
 .DS_Store
 # raw API responses: include Ganjoor AI paraphrases; rebuildable with tools/fetch-ganjoor.mjs
 content/raw/
+# WWQI letters: local research use only until Harvard gives permission (tools/fetch-wwqi.mjs)
+content/local/
