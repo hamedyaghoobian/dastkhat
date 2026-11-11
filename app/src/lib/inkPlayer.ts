@@ -2,7 +2,7 @@
 // (a reply grows word by word), and the canvas can grow without losing what is written.
 import type { Hand } from '../engine/hand';
 import type { Stroke } from '../engine/compose';
-import { drawBetween, sizeCanvas } from '../engine/render';
+import { InkCanvas } from '../engine/ink';
 import { shiftStroke } from '../engine/marks';
 
 export class InkPlayer {
@@ -11,7 +11,7 @@ export class InkPlayer {
   private end = 0;
   private raf = 0;
   private last = 0;
-  private ctx: CanvasRenderingContext2D;
+  private ink: InkCanvas;
   pace = 1;
   onProgress?: (done: number, total: number) => void;
   onIdle?: () => void;
@@ -23,23 +23,28 @@ export class InkPlayer {
 
   constructor(canvas: HTMLCanvasElement, hand: Hand, w: number, h: number) {
     this.canvas = canvas; this.hand = hand; this.w = w; this.h = h;
-    this.ctx = sizeCanvas(canvas, w, h);
+    this.ink = new InkCanvas(canvas);
+    this.canvas.style.width = w + 'px'; this.canvas.style.height = h + 'px';
+    this.draw();
   }
+
+  /** Ink is a density field (engine/ink.ts): every frame redraws the page up to the pen's time. */
+  private draw() { this.ink.render(this.all, this.hand, this.clock, this.w, this.h); }
 
   setHand(hand: Hand) { this.hand = hand; }
 
   resize(w: number, h: number) {
     if (w === this.w && h === this.h) return;
     this.w = w; this.h = h;
-    this.ctx = sizeCanvas(this.canvas, w, h);
-    drawBetween(this.ctx, this.all, this.hand, -Infinity, this.clock);
+    this.canvas.style.width = w + 'px'; this.canvas.style.height = h + 'px';
+    this.draw();
   }
 
   reset() {
     cancelAnimationFrame(this.raf);
     this.raf = 0;
     this.all = []; this.clock = 0; this.end = 0;
-    this.ctx.clearRect(0, 0, this.w, this.h);
+    this.draw();
   }
 
   /** Queue strokes. Their own times are kept relative to each other; the batch starts after what is queued. */
@@ -61,9 +66,8 @@ export class InkPlayer {
     const frame = (now: number) => {
       const dt = Math.min(64, now - this.last);
       this.last = now;
-      const next = Math.min(this.end, this.clock + dt * this.pace);
-      drawBetween(this.ctx, this.all, this.hand, this.clock, next);
-      this.clock = next;
+      this.clock = Math.min(this.end, this.clock + dt * this.pace);
+      this.draw();
       this.onProgress?.(this.clock, this.end);
       if (this.clock >= this.end) { this.raf = 0; this.onIdle?.(); return; }
       this.raf = requestAnimationFrame(frame);
@@ -74,8 +78,8 @@ export class InkPlayer {
   finish() {
     cancelAnimationFrame(this.raf);
     this.raf = 0;
-    drawBetween(this.ctx, this.all, this.hand, this.clock, this.end);
     this.clock = this.end;
+    this.draw();
     this.onProgress?.(this.clock, this.end);
     this.onIdle?.();
   }

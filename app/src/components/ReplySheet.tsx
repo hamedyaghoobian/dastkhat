@@ -141,7 +141,7 @@ export function ReplySheet({ hand, paper, width, shape, replyTo }: Props) {
       >
         <div className="grain" />
         {p.ruled && ruleYs(hand, height).map((y) => <div key={y} className="rule" style={{ top: y }} />)}
-        <canvas ref={canvas} style={{ opacity: hand.ink.alpha }} />
+        <canvas ref={canvas} />
         {(focused || pending) && (
           <span className="ghost" style={{ right: width - cx, top: cy - em * 0.95, fontSize: Math.max(15, em * 0.55) }}>
             {pending || '‌'}

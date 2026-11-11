@@ -49,7 +49,7 @@ export const Sheet = forwardRef<SheetHandle, Props>(function Sheet({ page, hand,
     <div className={`sheet ${paper}`} style={{ width: w, height: h }} role="img" aria-label={label}>
       <div className="grain" />
       {p.ruled && ruleYs(hand, h).map((y) => <div key={y} className="rule" style={{ top: y }} />)}
-      <canvas ref={canvas} style={{ opacity: hand.ink.alpha }} />
+      <canvas ref={canvas} />
     </div>
   );
 });

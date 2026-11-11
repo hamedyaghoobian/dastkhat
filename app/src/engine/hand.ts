@@ -78,7 +78,8 @@ export function makeHand(seed: string, o: HandOverrides = {}): Hand {
     pressure: o.pressure ?? r.range(0.75, 1.25),
     pen,
     nibAngle: r.range(0.9, 1.25), // about 50°–70°, the way a reed is held for naskh
-    nibWidth: pen === 'reed' ? r.range(0.07, 0.1) : pen === 'fountain' ? r.range(0.04, 0.06) : pen === 'pencil' ? r.range(0.03, 0.04) : r.range(0.028, 0.036),
+    // line widths as a share of the letter size: a reed's full width, a fountain or ballpoint's line, a pencil's
+    nibWidth: pen === 'reed' ? r.range(0.085, 0.115) : pen === 'fountain' ? r.range(0.06, 0.085) : pen === 'pencil' ? r.range(0.05, 0.062) : r.range(0.045, 0.056),
     ink: INKS.find((i) => i.id === inkId) ?? INKS[0],
     speed: 0.5 + hurry * 0.7,
   };

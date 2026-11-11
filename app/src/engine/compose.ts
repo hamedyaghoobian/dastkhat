@@ -9,14 +9,16 @@
 import skeletons from './data/skeletons.json';
 import type { Hand } from './hand';
 import { noise1, noise2, rng } from './rng';
+import { kinematics } from './kinematics';
 import type { ShapedGlyph } from './shaper';
 
 type SkGlyph = { paths: { c: number; p: number[] }[]; dots: [number, number, number][]; w: number };
 const SK = skeletons as unknown as { upem: number; glyphs: Record<string, SkGlyph> };
 
 export type StrokeKind = 'body' | 'dot' | 'mark' | 'strike';
-/** pts: flat [x, y, t(ms), pressure] per point, in page px */
-export type Stroke = { pts: number[]; kind: StrokeKind; word: number };
+/** pts: flat [x, y, t(ms), pressure] per point, in page px. group: strokes of one connected piece share it, so the
+ *  ink renderer lays their overlaps (junctions, retraced joins) once instead of twice. */
+export type Stroke = { pts: number[]; kind: StrokeKind; word: number; group?: number };
 export type PlacedWord = { index: number; text: string; line: number; x0: number; x1: number; y: number; t0: number; t1: number };
 export type Page = {
   strokes: Stroke[];
@@ -159,6 +161,7 @@ export function compose(
   const right = width - margin.right, leftEdge = margin.left;
   const lineH = em * hand.lineGap;
   const strokes: Stroke[] = [];
+  let nextGroup = 1;
   const words: PlacedWord[] = [];
   const lineYs: number[] = [];
   let t = opts.startTime ?? 0;
@@ -223,20 +226,22 @@ export function compose(
       const later: (() => void)[] = [];
       const speed = hand.speed * (1 + wr.normal(0, 0.12));
 
-      const writeMove = (pts: Pt[], kind: StrokeKind, pace = 1) => {
+      const writeMove = (pts: Pt[], kind: StrokeKind, pace = 1, group = nextGroup++) => {
         if (pts.length < 2) pts = [pts[0], [pts[0][0] - 0.5, pts[0][1] + 0.5]];
         const L = polyLen(pts) || 1;
+        // speed along the stroke: slow at turns and at both ends (kinematics.ts); the ink follows it
+        const kin = kinematics(pts, em * 0.45);
         const out: number[] = [];
         let acc = 0;
         for (let i = 0; i < pts.length; i++) {
           if (i) acc += dist(pts[i], pts[i - 1]);
           const u = acc / L;
-          const v = speed * pace * (0.35 + 0.65 * Math.sin(Math.PI * Math.min(1, Math.max(0, u))));
-          if (i) t += dist(pts[i], pts[i - 1]) / Math.max(0.05, v);
+          const v = speed * pace * 0.78 * Math.max(0.08, i ? (kin.vn[i] + kin.vn[i - 1]) / 2 : kin.vn[0]);
+          if (i) t += dist(pts[i], pts[i - 1]) / Math.max(0.03, v);
           const pr = hand.pressure * (0.85 + 0.15 * pressN(t / 900)) * (0.75 + 0.25 * Math.sin(Math.PI * Math.min(1, u * 1.15)));
           out.push(pts[i][0], pts[i][1], t, pr);
         }
-        strokes.push({ pts: out, kind, word: wordIndex });
+        strokes.push({ pts: out, kind, word: wordIndex, group });
       };
       // the pen in the air: quick hops inside a word, a little longer to the next piece
       const lift = (d: number) => { t += (d < em * 0.4 ? 15 : 40) + d / (hand.speed * 3) + r.range(0, 40) * (1 - hand.hurry); };
@@ -247,7 +252,7 @@ export function compose(
         const jit = () => wr.normal(0, rr * 0.35 * (0.5 + untidy));
         const above = g.cy > 400;
         const d = Math.max(rr * 1.2, em * 0.035);
-        const broad = hand.pen === 'reed' || hand.pen === 'fountain';
+        const broad = hand.pen === 'reed';
         const dab = (x0: number, y0: number) => {
           if (broad) {
             // a reed's nuqta: one short push across the nib's edge, which leaves a small rhombus
@@ -279,9 +284,10 @@ export function compose(
       const joinTol = SK.upem * 0.025;
       for (const piece of main) {
         const moves = orderPaths(piece.paths, joinTol).map((m) => m.map(tf));
+        const g = nextGroup++;
         for (const m of moves) {
           if (pen) lift(dist(pen, m[0]));
-          writeMove(m, 'body');
+          writeMove(m, 'body', 1, g);
           pen = m[m.length - 1];
         }
         const marks = () => {
@@ -291,9 +297,10 @@ export function compose(
       }
       for (const piece of pieces.filter((p) => p.small)) {
         later.push(() => {
+          const g = nextGroup++;
           for (const m of orderPaths(piece.paths, joinTol).map((mm) => mm.map(tf))) {
             if (pen) lift(dist(pen, m[0]));
-            writeMove(m, 'mark', 0.8);
+            writeMove(m, 'mark', 0.8, g);
             pen = m[m.length - 1];
           }
           for (const g of piece.dots) { if (pen) lift(dist(pen, tf([g.cx, g.cy]))); writeDots(g); }

@@ -1,4 +1,4 @@
-// Ink on a canvas. A reed or fountain nib is a short flat edge: sweeping it from one point
+// The flat fallback when WebGL2 is missing (ink.ts is the real renderer). A reed nib is a short flat edge: sweeping it from one point
 // to the next fills a parallelogram, which is where naskh's thick and thin come from, and
 // why a reed's nuqta comes out as a small rhombus. Ballpoint and pencil are round.
 import type { Hand } from './hand';
@@ -12,9 +12,9 @@ export function nibHalf(hand: Hand) {
 
 function segment(ctx: CanvasRenderingContext2D, hand: Hand, x0: number, y0: number, p0: number, x1: number, y1: number, p1: number) {
   const pr = Math.sqrt((p0 + p1) / 2);
-  if (hand.pen === 'reed' || hand.pen === 'fountain') {
+  if (hand.pen === 'reed') {
     const [hx0, hy0] = nibHalf(hand);
-    const k = pr * (hand.pen === 'fountain' ? 1 : 1.05);
+    const k = pr * 1.05;
     const hx = hx0 * k, hy = hy0 * k;
     // a thin hairline so strokes along the nib never vanish
     const min = hand.size * (hand.pen === 'reed' ? 0.012 : 0.009);

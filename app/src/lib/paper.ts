@@ -1,6 +1,6 @@
 import type { Hand } from '../engine/hand';
 import type { Stroke } from '../engine/compose';
-import { drawBetween } from '../engine/render';
+import { InkCanvas } from '../engine/ink';
 
 export type PaperId = 'ivory' | 'khaki' | 'tinted' | 'white';
 export const PAPERS: { id: PaperId; name: string; color: string; ruled: boolean }[] = [
@@ -32,16 +32,12 @@ export function renderPage(strokes: Stroke[], hand: Hand, w: number, h: number, 
     ctx.fillStyle = 'rgba(150,170,195,0.55)';
     for (const y of ruleYs(hand, h)) ctx.fillRect(0, y, w, 1);
   }
-  // On screen the ink canvas is drawn opaque and shown at the ink's opacity, multiplied onto the
-  // paper. Do the same here, so overlapping segments don't bead darker than they look on screen.
+  // The ink exactly as on screen: the same density renderer, multiplied over the paper.
   const ink = document.createElement('canvas');
-  ink.width = c.width; ink.height = c.height;
-  const ictx = ink.getContext('2d')!;
-  ictx.scale(scale, scale);
-  drawBetween(ictx, strokes, hand, -Infinity, Infinity);
+  const gl = new InkCanvas(ink).render(strokes, hand, Infinity, w, h + 40, scale);
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.globalAlpha = hand.ink.alpha;
+  if (!gl) ctx.globalAlpha = hand.ink.alpha;
   ctx.globalCompositeOperation = 'multiply';
   ctx.drawImage(ink, 0, 0);
   ctx.restore();
