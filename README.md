@@ -1,4 +1,4 @@
-# اگر این نامه به دستت رسید — Persian letters, written by hand
+# Dastkhat (دست‌خط): Persian letters, written by hand
 
 Real Persian letters, in their writers' own words, written out live, stroke by stroke and right to left, in the hand
 of a writer who never existed. A Persian counterpart to [If This Finds You](https://github.com/rafaelcespedes/if-this-finds-you)

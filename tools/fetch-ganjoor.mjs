@@ -13,7 +13,7 @@ const RAW = new URL('raw/ganjoor/', ROOT);
 mkdirSync(RAW, { recursive: true });
 const offline = process.argv.includes('--offline');
 const API = 'https://api.ganjoor.net/api/ganjoor';
-const UA = { 'User-Agent': 'persian-letters-dh/0.1 (digital humanities research; static site build)' };
+const UA = { 'User-Agent': 'dastkhat/0.1 (digital humanities research; static site build)' };
 
 async function cached(name, url) {
   const f = new URL(name, RAW);

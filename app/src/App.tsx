@@ -28,7 +28,7 @@ export default function App() {
   return (
     <>
       <header className="topbar">
-        <a className="brand" href="#/">اگر این نامه به دستت رسید <small>نامه‌های واقعی، دست‌های ساختگی</small></a>
+        <a className="brand" href="#/">دست‌خط <small>نامه‌های واقعی، دست‌های ساختگی</small></a>
         <nav className="nav" aria-label="بخش‌ها">
           <a href="#/" aria-current={here === 'letter' ? 'page' : undefined}>میز</a>
           <a href="#/letters" aria-current={here === 'letters' ? 'page' : undefined}>همهٔ نامه‌ها ({LETTERS.length.toLocaleString('fa')})</a>
