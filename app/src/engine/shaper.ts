@@ -6,19 +6,21 @@ import createHarfBuzz from 'harfbuzzjs/hb.js';
 // @ts-expect-error: plain JS wrapper, no types
 import hbjs from 'harfbuzzjs/hbjs.js';
 import wasmUrl from 'harfbuzzjs/hb.wasm?url';
-const fontUrl = `${import.meta.env.BASE_URL}fonts/Vazirmatn-Thin.ttf`;
-
 export type ShapedGlyph = { g: number; cl: number; ax: number; dx: number; dy: number };
 
-type Shaper = { shape(text: string): ShapedGlyph[]; upem: number };
+export type Shaper = { shape(text: string): ShapedGlyph[]; upem: number };
 
-let ready: Promise<Shaper> | null = null;
+const ready = new Map<string, Promise<Shaper>>();
+let hbModule: Promise<unknown> | null = null;
 
-export function loadShaper(): Promise<Shaper> {
-  if (ready) return ready;
-  ready = (async () => {
+/** A shaper for one font file in public/fonts/. */
+export function loadShaper(file = 'Vazirmatn-Thin.ttf'): Promise<Shaper> {
+  const fontUrl = `${import.meta.env.BASE_URL}fonts/${file}`;
+  const hit = ready.get(fontUrl);
+  if (hit) return hit;
+  const p = (async () => {
     const [mod, fontBuf] = await Promise.all([
-      createHarfBuzz({ locateFile: () => wasmUrl }),
+      (hbModule ??= createHarfBuzz({ locateFile: () => wasmUrl })),
       fetch(fontUrl).then((r) => r.arrayBuffer()),
     ]);
     const hb = hbjs(mod);
@@ -44,7 +46,8 @@ export function loadShaper(): Promise<Shaper> {
       },
     };
   })();
-  return ready;
+  ready.set(fontUrl, p);
+  return p;
 }
 
 /** Tidy text the way a Persian reader expects: Persian yeh and kaf, Persian digits, no stray tatweel. */

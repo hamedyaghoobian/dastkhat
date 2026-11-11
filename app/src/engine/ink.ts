@@ -71,7 +71,7 @@ function profile(st: Stroke, hand: Hand, ord: number): Profile | null {
   const P = st.pts, N0 = P.length / 4;
   if (N0 < 2) return null;
   const spec = SPECS[hand.pen];
-  const em = hand.size, xh = em * 0.45;
+  const em = hand.size, xh = hand.xh || em * 0.45;
   const W = hand.nibWidth * em;
   const c = clamp((hand.pressure - 0.6) / 0.8, 0, 1);
   const fluency = 1 - hand.neatness;

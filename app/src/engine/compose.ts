@@ -6,14 +6,11 @@
 // from its right end, and the dots, gāf bars and hamzas come after, as one dash or one
 // caret when the writer is in a hurry. The whole word is then bent by one smooth field,
 // so the joins stay joined however untidy the writer is.
-import skeletons from './data/skeletons.json';
 import type { Hand } from './hand';
+import type { Script, SkSet } from './script';
 import { noise1, noise2, rng } from './rng';
 import { kinematics } from './kinematics';
 import type { ShapedGlyph } from './shaper';
-
-type SkGlyph = { paths: { c: number; p: number[] }[]; dots: [number, number, number][]; w: number };
-const SK = skeletons as unknown as { upem: number; glyphs: Record<string, SkGlyph> };
 
 export type StrokeKind = 'body' | 'dot' | 'mark' | 'strike';
 /** pts: flat [x, y, t(ms), pressure] per point, in page px. group: strokes of one connected piece share it, so the
@@ -34,7 +31,7 @@ export type Page = {
 export type PageOpts = { width: number; margin: { top: number; right: number; bottom: number; left: number }; startTime?: number };
 
 type Pt = [number, number];
-type Path = { pts: Pt[]; glyph: number; comp: number };
+type Path = { pts: Pt[]; glyph: number; comp?: number };
 
 const dist = (a: Pt, b: Pt) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
@@ -70,7 +67,7 @@ function groupDots(dots: [number, number, number][]): DotGroup[] {
 
 const geomCache = new Map<string, WordGeom>();
 
-function wordGeometry(glyphs: ShapedGlyph[], key: string): WordGeom {
+function wordGeometry(glyphs: ShapedGlyph[], key: string, SK: SkSet): WordGeom {
   const hit = geomCache.get(key);
   if (hit) return hit;
   const paths: Path[] = [];
@@ -113,13 +110,50 @@ function wordGeometry(glyphs: ShapedGlyph[], key: string): WordGeom {
   // each glyph's dots go with the main piece that glyph belongs to
   dotsByGlyph.forEach((ds, gi) => {
     if (!ds.length) return;
-    const owner = pieces.find((p) => !p.small && p.glyphs.has(gi)) ?? pieces.find((p) => p.glyphs.has(gi)) ?? pieces[0];
+    const owner = pieces.find((p) => !p.small && p.glyphs.has(gi)) ?? pieces.find((p) => p.glyphs.has(gi)) ?? nearestPiece(pieces, ds[0]);
     if (owner) owner.dots.push(...groupDots(ds));
     else pieces.push({ paths: [], maxX: ds[0][0], small: true, dots: groupDots(ds), glyphs: new Set([gi]) });
   });
   const geom: WordGeom = { width: x, pieces: pieces.map(({ paths, maxX, small, dots }) => ({ paths, maxX, small, dots })) };
   geomCache.set(key, geom);
   return geom;
+}
+
+/** A quick hand rounds what a careful one draws sharp: resample, then a gentle Gaussian along the stroke (ends kept). */
+function roundOff(pts: Pt[], sigma: number): Pt[] {
+  const total = polyLen(pts);
+  if (total < sigma * 4 || pts.length < 3) return pts;
+  const step = Math.max(0.5, sigma / 3);
+  const res: Pt[] = [pts[0]];
+  let acc = 0, need = step;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], d = dist(a, b);
+    while (acc + d >= need) { const u = (need - acc) / (d || 1); res.push([a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u]); need += step; }
+    acc += d;
+  }
+  res.push(pts[pts.length - 1]);
+  const k = Math.ceil((sigma / step) * 2.5), w: number[] = [];
+  for (let j = -k; j <= k; j++) w.push(Math.exp(-0.5 * ((j * step) / sigma) ** 2));
+  const out: Pt[] = res.map((p, i) => {
+    // fade the smoothing in from both ends so the stroke starts and ends where it did
+    const edge = Math.min(i, res.length - 1 - i) / k;
+    if (edge <= 0) return p;
+    let sx = 0, sy = 0, sw = 0;
+    for (let j = -k; j <= k; j++) { const q = res[Math.min(res.length - 1, Math.max(0, i + j))]; sx += q[0] * w[j + k]; sy += q[1] * w[j + k]; sw += w[j + k]; }
+    const f = Math.min(1, edge);
+    return [p[0] + (sx / sw - p[0]) * f, p[1] + (sy / sw - p[1]) * f];
+  });
+  return out;
+}
+
+/** The main piece closest to a point (for nuqtas that come as glyphs of their own). */
+function nearestPiece<T extends { paths: Path[]; small: boolean }>(pieces: T[], d: [number, number, number]): T | undefined {
+  let best = pieces[0], bd = Infinity;
+  for (const p of pieces) {
+    if (p.small && pieces.some((q) => !q.small)) continue;
+    for (const pa of p.paths) { const dd = pointToPolyline([d[0], d[1]], pa.pts); if (dd < bd) { bd = dd; best = p; } }
+  }
+  return best;
 }
 
 /** Order a piece's paths into pen movements: start at the right (top first), then go to whatever is nearest. */
@@ -152,14 +186,18 @@ export type ComposeState = { page: Page };
 export function compose(
   text: string,
   hand: Hand,
-  shape: (w: string) => ShapedGlyph[],
+  script: Script,
   opts: PageOpts,
 ): Page {
-  const s = hand.size / SK.upem;
+  const SK = script.sk;
+  // a nasta'liq hand writes like a letter, not a copybook (hand.loose); naskh stays upright
+  const loose = script.style === 'nastaliq' ? hand.loose : { cascade: 0, slant: 0, rise: 0, compress: 1, round: 0, dotDrop: 0, scale: 1 };
+  const s = hand.size * script.scale / SK.upem;
   const em = hand.size;
+  const xh = em * script.xh;
   const { width, margin } = opts;
   const right = width - margin.right, leftEdge = margin.left;
-  const lineH = em * hand.lineGap;
+  const lineH = em * hand.lineGap * script.lineGap;
   const strokes: Stroke[] = [];
   let nextGroup = 1;
   const words: PlacedWord[] = [];
@@ -190,9 +228,9 @@ export function compose(
     const ws = para.split(' ').filter(Boolean);
     for (const w of ws) {
       const wr = rng(`word:${hand.seed}:${wordIndex}:${w}`);
-      const glyphs = shape(w);
-      const geom = wordGeometry(glyphs, w);
-      let sx = s * hand.stretch * (1 + wr.normal(0, 0.03 * (0.4 + untidy)));
+      const glyphs = script.shape(w);
+      const geom = wordGeometry(glyphs, script.style + ':' + w, SK);
+      let sx = s * hand.stretch * loose.compress * (1 + wr.normal(0, 0.03 * (0.4 + untidy)));
       const sy = s * (1 + wr.normal(0, 0.035 * (0.4 + untidy)));
       let wpx = geom.width * sx;
       // Persian words sit close, but never touch: a word ending in a free letter (ا د ر و …) needs a visible gap
@@ -207,14 +245,15 @@ export function compose(
           wpx = geom.width * sx;
         } else newLine();
       }
-      const wordY = y + drift(x / (em * 6) + line * 17) * em * hand.baselineDrift * 6 + wr.normal(0, em * 0.02 * (0.3 + untidy));
-      const tilt = hand.wordTilt * (1 + wr.normal(0, 0.4)) + squeeze * 0.35;
+      const wordY = y - (right - x) * loose.rise + drift(x / (em * 6) + line * 17) * em * hand.baselineDrift * 6 + wr.normal(0, em * 0.02 * (0.3 + untidy));
+      const tilt = hand.wordTilt * (1 + wr.normal(0, 0.4)) + squeeze * 0.35 - loose.cascade * (1 + wr.normal(0, 0.35));
+      const lean = hand.slant + loose.slant * (1 + wr.normal(0, 0.15));
       const xRight = x;
       const bendAmp = hand.wobble * em * 10;
       const tf = (p: Pt): Pt => {
         // font units → page, y down; x measured from the word's right end
         const fx = (p[0] - geom.width) * sx, fy = -p[1] * sy;
-        let px = xRight + fx - fy * hand.slant;
+        let px = xRight + fx - fy * lean;
         let py = wordY + fy + fx * tilt;
         const bx = bend(px / (em * 0.9), py / (em * 0.9)), by = bend(py / (em * 0.9) + 50, px / (em * 0.9) + 50);
         px += bx * bendAmp; py += by * bendAmp;
@@ -228,9 +267,10 @@ export function compose(
 
       const writeMove = (pts: Pt[], kind: StrokeKind, pace = 1, group = nextGroup++) => {
         if (pts.length < 2) pts = [pts[0], [pts[0][0] - 0.5, pts[0][1] + 0.5]];
+        if (kind === 'body' && loose.round > 0) pts = roundOff(pts, em * loose.round);
         const L = polyLen(pts) || 1;
         // speed along the stroke: slow at turns and at both ends (kinematics.ts); the ink follows it
-        const kin = kinematics(pts, em * 0.45);
+        const kin = kinematics(pts, xh);
         const out: number[] = [];
         let acc = 0;
         for (let i = 0; i < pts.length; i++) {
@@ -246,11 +286,18 @@ export function compose(
       // the pen in the air: quick hops inside a word, a little longer to the next piece
       const lift = (d: number) => { t += (d < em * 0.4 ? 15 : 40) + d / (hand.speed * 3) + r.range(0, 40) * (1 - hand.hurry); };
 
-      const writeDots = (g: DotGroup) => {
+      const writeDots = (g: DotGroup, under?: Path[]) => {
+        if (wr.chance(loose.dotDrop)) return; // a quick hand leaves some nuqtas out
         const [cx, cy] = tf([g.cx, g.cy]);
         const rr = (g.dots[0][2] * s) * 1.1;
         const jit = () => wr.normal(0, rr * 0.35 * (0.5 + untidy));
-        const above = g.cy > 400;
+        // above or below its letter: compare with the stroke right under (or over) it, since nasta'liq words cascade
+        let above = g.cy > SK.upem * 0.2;
+        if (under?.length) {
+          let bx = Infinity, by = 0;
+          for (const pa of under) for (const q of pa.pts) { const d = Math.abs(q[0] - g.cx); if (d < bx) { bx = d; by = q[1]; } }
+          if (bx < SK.upem * 0.4) above = g.cy > by;
+        }
         const d = Math.max(rr * 1.2, em * 0.035);
         const broad = hand.pen === 'reed';
         const dab = (x0: number, y0: number) => {
@@ -291,19 +338,22 @@ export function compose(
           pen = m[m.length - 1];
         }
         const marks = () => {
-          for (const g of piece.dots) { if (pen) lift(dist(pen, tf([g.cx, g.cy]))); writeDots(g); pen = tf([g.cx, g.cy]); }
+          for (const g of piece.dots) { if (pen) lift(dist(pen, tf([g.cx, g.cy]))); writeDots(g, piece.paths); pen = tf([g.cx, g.cy]); }
         };
         if (wr.chance(hand.dotsAfterWord)) later.push(marks); else marks();
       }
       for (const piece of pieces.filter((p) => p.small)) {
         later.push(() => {
           const g = nextGroup++;
-          for (const m of orderPaths(piece.paths, joinTol).map((mm) => mm.map(tf))) {
+          // nasta'liq fonts draw a pair of nuqtas as one short dash, a mark of its own: a quick hand may skip it too
+          const tiny = piece.paths.reduce((acc, p) => acc + polyLen(p.pts), 0) < SK.upem * 0.15;
+          const paths = tiny && wr.chance(loose.dotDrop) ? [] : piece.paths;
+          for (const m of orderPaths(paths, joinTol).map((mm) => mm.map(tf))) {
             if (pen) lift(dist(pen, m[0]));
             writeMove(m, 'mark', 0.8, g);
             pen = m[m.length - 1];
           }
-          for (const g of piece.dots) { if (pen) lift(dist(pen, tf([g.cx, g.cy]))); writeDots(g); }
+          for (const g of piece.dots) { if (pen) lift(dist(pen, tf([g.cx, g.cy]))); writeDots(g, piece.paths); }
         });
       }
       later.forEach((f) => f());

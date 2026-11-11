@@ -2,7 +2,7 @@
 
 Real Persian letters, in their writers' own words, written out live, stroke by stroke and right to left, in the hand
 of a writer who never existed. A Persian counterpart to [If This Finds You](https://github.com/rafaelcespedes/if-this-finds-you)
-(the idea, not the code: Persian needs its own engine, and this one is written from scratch).
+The Persian engine (shaping, skeletons, layout) is its own; the ink model is ported from If This Finds You (MIT, see Credits).
 
 ## Run it
 
@@ -32,17 +32,19 @@ https://hamedyaghoobian.com/dastkhat/.
 | Step | Where |
 |---|---|
 | Shaping: joining forms, lām-alef, mark positions (HarfBuzz, WASM) | `app/src/engine/shaper.ts` |
-| Single-line skeletons for every glyph Persian text can reach, from Vazirmatn Thin: rasterise → Zhang–Suen thinning → spur pruning → tracing; dots kept apart | `tools/skeletonize.mjs` → `app/src/engine/data/skeletons.json` |
-| A seed becomes a writer, with correlated traits (hurry → untidier, more dashes for dots) | `app/src/engine/hand.ts` |
+| Two scripts (`app/src/engine/script.ts`). **Nasta'liq** (the default), the hand real Persian letters were written in, from Noto Nastaliq Urdu; **naskh**, upright and rounder, from Vazirmatn Thin. Each is loaded only when a hand uses it | `app/src/engine/script.ts`, `shaper.ts` |
+| Single-line skeletons for the glyphs: rasterise → Zhang–Suen thinning → spur pruning → tracing; dots kept apart. For nasta'liq, the solid heads of و ف ق م ه get a counter punched first so they trace as small loops, and a compact blob inside a letter is never a dot (the font keeps nuqtas as glyphs of their own) | `tools/skeletonize.mjs` → `app/src/engine/data/skeletons*.json` |
+| A seed becomes a writer, with correlated traits (hurry → untidier, more dashes for dots). A nasta'liq writer also gets a *loose* hand: words that drop toward their left end, a lean, lines that climb to the left, letters squeezed sideways, teeth and bumps rounded off, some nuqtas left out, and a writing size from small and dense to large. These are what separate a quick letter from a copybook | `app/src/engine/hand.ts` |
 | Layout and stroke order: each connected piece of a word in one movement from the right, then dots, gāf bars and hamzas; two dots as a dash, three as a caret when hurried; one smooth bend per word so joins stay joined; words climbing to the left; last word squeezed into the margin | `app/src/engine/compose.ts` |
-| Pens: a broad nib sweeps parallelograms (naskh's thick and thin; a reed's nuqta comes out as a rhombus); round pens and pencil | `app/src/engine/render.ts` |
+| Pen timing: speed follows curvature (the two-thirds power law), slow at turns and at both ends | `app/src/engine/kinematics.ts` |
+| Ink as a density field (WebGL2): width and ink along each stroke follow the pen's speed, a stop pools, a flick thins; one pen-down is laid once and crossings darken; wet ink dries darker at the rim, edges are a little rough, and Beer–Lambert colour lets the paper's grain show through thin ink. The reed is a broad nib and a dip pen (it runs dry between dips); the fountain pen is round; a ballpoint streaks and skips; graphite catches the paper's tooth. Without WebGL2 a flat renderer is used | `app/src/engine/ink.ts` (`render.ts` is the fallback) |
 | Crossing out | `app/src/engine/marks.ts` |
 
 Determinism: the same seed, settings and text always give the same page (all randomness goes through `rng()`).
 
-Rebuild the skeletons after changing the font or the tracer: `node tools/skeletonize.mjs app/public/fonts/Vazirmatn-Thin.ttf app/src/engine/data/skeletons.json`.
+Rebuild the skeletons after changing a font or the tracer: `node tools/skeletonize.mjs app/public/fonts/Vazirmatn-Thin.ttf app/src/engine/data/skeletons.json` for naskh, and `ALL=1 UPP=3 PUNCH=1 NOBODYDOTS=1 node tools/skeletonize.mjs app/public/fonts/NotoNastaliqUrdu.ttf app/src/engine/data/skeletons-nastaliq.json` for nasta'liq.
 `node tools/preview-skeleton.mjs "متن" out.svg` draws the skeletons over the font outline for checking, and
-`node tools/check-coverage.mjs` shapes every word of every letter and fails if any glyph has no strokes.
+`node tools/check-coverage.mjs` shapes every word of every letter in both scripts and fails if any glyph is missing or has no strokes.
 
 ## The letters
 
@@ -91,13 +93,14 @@ to cite) and a link to the item.
 ## Not done yet
 
 - Publishing the WWQI letters, once Harvard agrees (see above).
-- Nasta'liq and shekasteh, the hands most of these letters were really written in (sloped baselines, stacked letters).
+- Fuller shekasteh: its extra joins (letters that never join in print running into the next), sīn written as a plain line, and words stacked over each other.
 - Hands built from real handwriting samples (e.g. public-domain copybooks) instead of a typeface's skeleton.
 - Downloadable fonts per hand, video and GIF export, and a saved-letters drawer, all of which the original has.
 
 ## Credits and licences
 
 - Vazirmatn, © The Vazirmatn Project Authors, SIL OFL 1.1 (`app/public/fonts/OFL.txt`).
+- Noto Nastaliq Urdu, © The Noto Project Authors, SIL OFL 1.1 (`app/public/fonts/OFL-NotoNastaliqUrdu.txt`).
 - HarfBuzz / harfbuzzjs, MIT.
 - Letters: Ganjoor, via Wikidorj. Public-domain texts. Locally, Women's Worlds in Qajar Iran, Harvard University (not redistributed).
-- Idea: *If This Finds You* by Rafael Cespedes (MIT).
+- Idea, and the ink model and pen kinematics (ported and adapted): *If This Finds You* by Rafael Cespedes, MIT (`app/public/licenses/if-this-finds-you.txt`).

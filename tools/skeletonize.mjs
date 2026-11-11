@@ -20,7 +20,16 @@ if (!fontPath || !outPath) {
   process.exit(1);
 }
 
-const UNITS_PER_PX = 6; // raster resolution: one pixel = 6 font units
+// Nasta'liq fonts (Noto Nastaliq Urdu) need two more things, switched on by environment variables:
+//   PUNCH=1      the heads of و ف ق م ه are solid teardrops with no counter; thinning reduces them to a stub that gets
+//                pruned. A hand writes them as small loops, so a round thick core is given a hole before thinning.
+//   NOBODYDOTS=1 the font keeps every nuqta as a glyph of its own, so inside a letter a compact blob is part of the
+//                letter (the head of an initial م), never a dot.
+const PUNCH = !!process.env.PUNCH;
+// ALL=1: trace every glyph with ink, not only those Persian text reaches (contextual nasta'liq forms are too many to reach)
+const ALL = !!process.env.ALL;
+const NOBODYDOTS = !!process.env.NOBODYDOTS;
+const UNITS_PER_PX = +(process.env.UPP || 6); // raster resolution: one pixel = 6 font units (UPP=3 for upem-1000 fonts)
 
 // ---------- outline → polygons ----------
 function flatten(cmds) {
@@ -91,6 +100,66 @@ function rasterise(polys) {
     }
   }
   return { img, W, H, ox, oy };
+}
+
+// ---------- distance to the nearest unfilled pixel (chamfer 3-4, in pixels) ----------
+function distance(img, W, H) {
+  const D = new Float32Array(W * H);
+  const BIG = 1e9;
+  for (let i = 0; i < D.length; i++) D[i] = img[i] ? BIG : 0;
+  const at = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 0 : D[y * W + x]);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x; if (!D[i]) continue;
+    D[i] = Math.min(D[i], at(x - 1, y) + 3, at(x, y - 1) + 3, at(x - 1, y - 1) + 4, at(x + 1, y - 1) + 4);
+  }
+  for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) {
+    const i = y * W + x; if (!D[i]) continue;
+    D[i] = Math.min(D[i], at(x + 1, y) + 3, at(x, y + 1) + 3, at(x + 1, y + 1) + 4, at(x - 1, y + 1) + 4);
+  }
+  for (let i = 0; i < D.length; i++) D[i] /= 3;
+  return D;
+}
+
+// Give solid round heads a counter: a core that is much thicker than the stroke and round (not a long thick swash).
+function punchHeads(img, W, H) {
+  const D = distance(img, W, H);
+  const pre = thin(img.slice(), W, H);
+  let skl = 0, ink = 0;
+  for (let i = 0; i < img.length; i++) { skl += pre[i]; ink += img[i]; }
+  if (!skl) return 0;
+  // the stroke's half width: the median distance along the skeleton
+  const ds = [];
+  for (let i = 0; i < pre.length; i++) if (pre[i]) ds.push(D[i]);
+  ds.sort((a, b) => a - b);
+  const h = ds[ds.length >> 1] || 1;
+  const order = [];
+  for (let i = 0; i < D.length; i++) if (D[i] >= Math.max(1.8, 1.55 * h)) order.push(i);
+  order.sort((a, b) => D[b] - D[a]);
+  const seen = new Uint8Array(W * H);
+  let punched = 0;
+  for (const p of order) {
+    if (seen[p]) continue;
+    const R = D[p];
+    // the core: pixels at least 0.7·R deep, connected to this maximum
+    const stack = [p]; seen[p] = 1;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    while (stack.length) {
+      const c = stack.pop(); const x = c % W, y = (c / W) | 0;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      for (const [dx, dy] of N8) {
+        const nx = x + dx, ny = y + dy, n = ny * W + nx;
+        if (nx >= 0 && ny >= 0 && nx < W && ny < H && !seen[n] && D[n] >= 0.7 * R) { seen[n] = 1; stack.push(n); }
+      }
+    }
+    if (Math.max(x1 - x0, y1 - y0) + 1 > 1.3 * R + 1.5) continue; // a ridge: a thick stretch of stroke, not a head
+    const rh = Math.max(0.9, R - 1.9 * h);
+    const cx = p % W, cy = (p / W) | 0;
+    for (let y = Math.floor(cy - rh); y <= Math.ceil(cy + rh); y++) for (let x = Math.floor(cx - rh); x <= Math.ceil(cx + rh); x++) {
+      if (x >= 0 && y >= 0 && x < W && y < H && Math.hypot(x - cx, y - cy) <= rh) img[y * W + x] = 0;
+    }
+    punched++;
+  }
+  return punched;
 }
 
 // ---------- Zhang–Suen thinning ----------
@@ -266,6 +335,7 @@ function skeletonGlyph(cmds) {
   const ink = filled.reduce((s, v) => s + v, 0);
   if (!ink) return null;
   const { lab, comps } = components(filled, W, H);
+  if (PUNCH) punchHeads(img, W, H);
   const sk = thin(img, W, H);
   // estimate stroke width: filled area / skeleton length
   const skLen = sk.reduce((s, v) => s + v, 0) || 1;
@@ -275,6 +345,13 @@ function skeletonGlyph(cmds) {
 
   const bodyComps = [], dots = [];
   const big = Math.max(...comps.map((c) => c.length));
+  const compact = (c) => {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const i of c) { const x = i % W, y = (i / W) | 0; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    const ext = Math.max(x1 - x0, y1 - y0) + 1;
+    return ext <= strokePx * 3.2 && (c.length < big || c.length / (ext * ext) > 0.45);
+  };
+  const allCompact = comps.every(compact);
   comps.forEach((c, id) => {
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const i of c) { const x = i % W, y = (i / W) | 0; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
@@ -283,7 +360,7 @@ function skeletonGlyph(cmds) {
     // a nuqta (or a full stop, or the Persian zero) is a compact blob: no longer than ~3 stroke
     // widths and mostly filled, never a stroke that merely happens to be short
     const fill = c.length / (ext * ext);
-    if (ext <= strokePx * 3.2 && (c.length < big || fill > 0.45)) {
+    if (ext <= strokePx * 3.2 && (c.length < big || fill > 0.45) && (!NOBODYDOTS || allCompact)) {
       const [cx, cy] = toUnits(Math.round((y0 + y1) / 2) * W + Math.round((x0 + x1) / 2));
       dots.push([Math.round(cx), Math.round(cy), Math.round((ext * UNITS_PER_PX) / 2)]);
     } else bodyComps.push(id);
@@ -350,7 +427,7 @@ try {
 const glyphs = {};
 let n = 0;
 for (let g = 0; g < numGlyphs; g++) {
-  if (!reach.has(g)) continue;
+  if (!ALL && !reach.has(g)) continue;
   const sk = skeletonGlyph(font.glyphToJson(g));
   if (!sk) continue;
   glyphs[g] = sk;

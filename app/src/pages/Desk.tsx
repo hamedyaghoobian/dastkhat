@@ -4,12 +4,13 @@ import { ReplySheet } from '../components/ReplySheet';
 import { compose } from '../engine/compose';
 import { INKS, PENS, makeHand, type HandOverrides, type PenKind } from '../engine/hand';
 import { newSeed, seedName } from '../engine/rng';
-import { normalisePersian, type ShapedGlyph } from '../engine/shaper';
+import { normalisePersian } from '../engine/shaper';
+import { STYLES, type Script } from '../engine/script';
 import { LETTERS, byId, excerpt, faNum, pickNext, rightsNote } from '../lib/letters';
 import { MARGIN, PAPERS, exportPNG, type PaperId } from '../lib/paper';
 import { navigate, type Route } from '../lib/route';
 
-type Props = { route: Extract<Route, { name: 'letter' }>; shape: (t: string) => ShapedGlyph[] };
+type Props = { route: Extract<Route, { name: 'letter' }>; script: Script };
 
 const PACES = [
   { v: 1, name: 'آرام' },
@@ -30,7 +31,7 @@ function useSheetWidth() {
   return [ref, w] as const;
 }
 
-export function Desk({ route, shape }: Props) {
+export function Desk({ route, script }: Props) {
   const letter = byId(route.id) ?? LETTERS[0];
   const seed = route.params.w || 'baran-roshan-17';
   const paper = (route.params.paper as PaperId) || 'ivory';
@@ -49,12 +50,13 @@ export function Desk({ route, shape }: Props) {
   const replyRef = useRef<HTMLDivElement>(null);
 
   const hand = useMemo(() => {
-    const h = makeHand(seed, overrides);
-    return { ...h, size: h.size * Math.min(1, Math.max(0.62, width / 700)) };
-  }, [seed, overrides, width]);
+    const h = makeHand(seed, { ...overrides, style: script.style });
+    const size = h.size * Math.min(1, Math.max(0.62, width / 700));
+    return { ...h, size, xh: size * script.xh };
+  }, [seed, overrides, width, script]);
 
   const { text, cut } = useMemo(() => excerpt(letter.text), [letter]);
-  const page = useMemo(() => compose(normalisePersian(text), hand, shape, { width, margin: MARGIN }), [text, hand, shape, width]);
+  const page = useMemo(() => compose(normalisePersian(text), hand, script, { width, margin: MARGIN }), [text, hand, script, width]);
 
   const set = useCallback((p: Record<string, string | undefined>, replace = false) => {
     const { id, ...rest } = p;
@@ -100,7 +102,7 @@ export function Desk({ route, shape }: Props) {
         {replying && (
           <div ref={replyRef} style={{ marginTop: 28 }}>
             <h2 style={{ fontSize: 16, margin: '0 0 10px' }}>پاسخ شما</h2>
-            <ReplySheet hand={hand} paper={paper} width={width} shape={shape} replyTo={letter.author} />
+            <ReplySheet hand={hand} paper={paper} width={width} script={script} replyTo={letter.author} />
           </div>
         )}
       </section>
@@ -135,6 +137,10 @@ export function Desk({ route, shape }: Props) {
 
         <div className="panel">
           <h3 style={{ marginTop: 0 }}>نویسنده: {seedName(seed)}</h3>
+          <h3>شیوه</h3>
+          <div className="seg" role="group" aria-label="شیوهٔ خط">
+            {STYLES.map((st) => <button key={st.id} aria-pressed={script.style === st.id} onClick={() => set({ style: st.id === 'nastaliq' ? undefined : st.id })}>{st.name}</button>)}
+          </div>
           <h3>قلم</h3>
           <div className="seg" role="group" aria-label="قلم">
             {PENS.map((p) => <button key={p.id} aria-pressed={hand.pen === p.id} onClick={() => set({ pen: p.id, ink: undefined })}>{p.name}</button>)}

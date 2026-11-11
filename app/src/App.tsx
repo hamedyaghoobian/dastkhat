@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { loadShaper, type ShapedGlyph } from './engine/shaper';
+import { loadScript, type Script, type Style } from './engine/script';
 import { Desk } from './pages/Desk';
 import { Library } from './pages/Library';
 import { Read } from './pages/Read';
@@ -9,12 +9,15 @@ import { navigate, useRoute } from './lib/route';
 
 export default function App() {
   const route = useRoute();
-  const [shape, setShape] = useState<((t: string) => ShapedGlyph[]) | null>(null);
+  const [script, setScript] = useState<Script | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const style: Style = route.name === 'letter' && route.params.style === 'naskh' ? 'naskh' : 'nastaliq';
 
   useEffect(() => {
-    loadShaper().then((s) => setShape(() => s.shape)).catch((e) => setError(String(e)));
-  }, []);
+    let live = true;
+    loadScript(style).then((s) => { if (live) setScript(s); }).catch((e) => setError(String(e)));
+    return () => { live = false; };
+  }, [style]);
 
   // the desk always opens on a letter, in a hand
   useEffect(() => {
@@ -39,8 +42,8 @@ export default function App() {
       {route.name === 'letters' && <Library />}
       {route.name === 'read' && <Read id={route.id} />}
       {route.name === 'about' && <About />}
-      {route.name === 'letter' && route.id && route.params.w && (shape
-        ? <Desk route={route} shape={shape} />
+      {route.name === 'letter' && route.id && route.params.w && (script && script.style === style
+        ? <Desk route={route} script={script} />
         : <p className="prose hint">قلم را آماده می‌کنیم…</p>)}
     </>
   );

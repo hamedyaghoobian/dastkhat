@@ -5,3 +5,4 @@ app/dist/
 content/raw/
 # WWQI letters: local research use only until Harvard gives permission (tools/fetch-wwqi.mjs)
 content/local/
+notes/

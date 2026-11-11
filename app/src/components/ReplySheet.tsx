@@ -5,14 +5,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Hand } from '../engine/hand';
 import { compose, type Page } from '../engine/compose';
-import { normalisePersian, type ShapedGlyph } from '../engine/shaper';
+import { normalisePersian } from '../engine/shaper';
+import type { Script } from '../engine/script';
 import { strikeStroke } from '../engine/marks';
 import { InkPlayer } from '../lib/inkPlayer';
 import { MARGIN, PAPERS, exportPNG, ruleYs, type PaperId } from '../lib/paper';
 
 type Token = { kind: 'word'; text: string; strikes: number } | { kind: 'nl' };
 
-type Props = { hand: Hand; paper: PaperId; width: number; shape: (t: string) => ShapedGlyph[]; replyTo: string | null };
+type Props = { hand: Hand; paper: PaperId; width: number; script: Script; replyTo: string | null };
 
 const MIN_H = 520;
 
@@ -25,7 +26,7 @@ function tokensToText(tokens: Token[]) {
   return s;
 }
 
-export function ReplySheet({ hand, paper, width, shape, replyTo }: Props) {
+export function ReplySheet({ hand, paper, width, script, replyTo }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const player = useRef<InkPlayer | null>(null);
@@ -38,7 +39,7 @@ export function ReplySheet({ hand, paper, width, shape, replyTo }: Props) {
   const drawnWords = useRef(0);
 
   const opts = useMemo(() => ({ width, margin: MARGIN }), [width]);
-  const page = useMemo(() => compose(normalisePersian(tokensToText(tokens)), hand, shape, opts), [tokens, hand, shape, opts]);
+  const page = useMemo(() => compose(normalisePersian(tokensToText(tokens)), hand, script, opts), [tokens, hand, script, opts]);
   const height = Math.max(MIN_H, page.height + hand.size * 2);
 
   // A new pen, writer or width keeps what you wrote: the reply is laid out again in the new hand,
@@ -46,7 +47,7 @@ export function ReplySheet({ hand, paper, width, shape, replyTo }: Props) {
   useEffect(() => {
     if (!canvas.current) return;
     const ts = tokensRef.current;
-    const pg = compose(normalisePersian(tokensToText(ts)), hand, shape, { width, margin: MARGIN });
+    const pg = compose(normalisePersian(tokensToText(ts)), hand, script, { width, margin: MARGIN });
     const p = new InkPlayer(canvas.current, hand, width, Math.max(MIN_H, pg.height + hand.size * 2));
     p.pace = 1.6;
     player.current = p;
@@ -61,7 +62,7 @@ export function ReplySheet({ hand, paper, width, shape, replyTo }: Props) {
     drawnWords.current = pg.words.length;
     pageRef.current = pg;
     return () => p.destroy();
-  }, [hand, width, shape]);
+  }, [hand, width, script]);
 
   // new words go to the pen as soon as they are committed
   useEffect(() => {
@@ -104,9 +105,11 @@ export function ReplySheet({ hand, paper, width, shape, replyTo }: Props) {
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return;
-    if (e.key === 'Enter') { e.preventDefault(); commit(pending, 'nl'); }
-    else if (e.key === ' ') { e.preventDefault(); commit(pending); }
-    else if (e.key === 'Backspace' && pending === '') { e.preventDefault(); crossOut(); }
+    // the textarea's own value, not the `pending` state: a fast typist's space can arrive before React re-renders
+    const v = e.currentTarget.value;
+    if (e.key === 'Enter') { e.preventDefault(); commit(v, 'nl'); e.currentTarget.value = ''; }
+    else if (e.key === ' ') { e.preventDefault(); commit(v); e.currentTarget.value = ''; }
+    else if (e.key === 'Backspace' && v === '') { e.preventDefault(); crossOut(); }
   };
   const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const v = e.target.value;
