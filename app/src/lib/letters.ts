@@ -25,7 +25,7 @@ export type Letter = {
   summary?: string | null;
   people?: string[];
   source: { name: string; url: string; edition: string | null; collection: string; holder?: string | null; record?: string };
-  rights: { basis: string };
+  rights: { basis: string; holderTerms?: string | null };
   enabled: boolean;
 };
 
@@ -34,7 +34,8 @@ export const LETTERS: Letter[] = [...(raw as Letter[]), ...Object.values(local).
 /** Where the words and the typed text come from, and on what terms (shown with every letter). */
 export function rightsNote(l: Letter): string {
   if (l.source.collection === 'wwqi')
-    return 'متن تایپی از آرشیو «دنیای زنان در عصر قاجار» (دانشگاه هاروارد) است و تنها برای پژوهش روی همین رایانه نمایش داده می‌شود؛ انتشار آن اجازهٔ هاروارد را می‌خواهد.';
+    return 'متن تایپی از آرشیو «دنیای زنان در عصر قاجار» (دانشگاه هاروارد) است و تنها برای پژوهش روی همین رایانه نمایش داده می‌شود؛ انتشار آن اجازهٔ هاروارد را می‌خواهد.'
+      + (l.rights.holderTerms ? ` شرط صاحب سند: ${l.rights.holderTerms}` : '');
   return 'نویسنده در ۱۲۵۱ ق / ۱۸۳۵ م درگذشته و متن در مالکیت عمومی است. متن تایپی را داوطلبان گنجور فراهم کرده‌اند؛ یادداشت‌ها و بازنویسی‌های ماشینی گنجور به کار نرفته است.';
 }
 

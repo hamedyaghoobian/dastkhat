@@ -318,7 +318,8 @@ addRange(0x060c, 0x061f);           // Arabic punctuation
 addRange(0x0621, 0x065f);           // Arabic letters + harakat
 addRange(0x066a, 0x06d5);           // extended letters (پ چ ژ گ ک ی ...), Persian forms
 addRange(0x06f0, 0x06f9);           // Persian digits
-chars.push('«', '»', '…', '–', '—', '‌', '‍');
+addRange(0x00a1, 0x00ff);           // Latin-1: accented letters, £, ½ (French and English in some letters)
+chars.push('«', '»', '…', '–', '—', '‌', '‍', '‘', '’', '“', '”', 'œ', 'Œ');
 const reach = new Set();
 const normaliseLikeRuntime = (x) => x
   .replace(/\u064A/g, '\u06CC').replace(/\u0649/g, '\u06CC').replace(/\u0643/g, '\u06A9')

@@ -75,7 +75,7 @@ const handText = (s) => s
   .replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{2,}/g, '\n').trim();
 
 const letters = [];
-const skipped = { restricted: 0, empty: 0, missing: 0 };
+const skipped = { empty: 0, notPersian: 0, missing: 0 };
 for (const id of ids) {
   const t = await cached(`items/${id}.html`, ITEM(id), (t) => t.includes('شماره سند'));
   if (t == null) { skipped.missing++; continue; }
@@ -83,8 +83,13 @@ for (const id of ids) {
   const transcript = body ? clean(body[1]) : '';
   const text = handText(transcript);
   if (text.length < 40) { skipped.empty++; continue; }
-  const restriction = field(t, 'محدودیت');
-  if (restriction && restriction !== 'بدون محدودیت') { skipped.restricted++; continue; }
+  // A few «Persian transcriptions» are letters in English or French (e.g. the 14133 collection); the hand is Persian.
+  const persian = (text.match(/[\u0600-\u06FF]/g) ?? []).length, latin = (text.match(/[A-Za-z\u00C0-\u024F]/g) ?? []).length;
+  if (persian < 2 * latin) { skipped.notPersian++; continue; }
+  // WWQI's «محدودیت» field: mostly «بدون محدودیت», otherwise the holder's conditions (cite the holding library,
+  // ask before commercial use). None forbids research use, so every letter is kept and the condition travels with it.
+  const restriction = field(t, 'محدودیت')?.replace(/\.$/, '') ?? null;
+  const holderTerms = restriction && restriction !== 'بدون محدودیت' ? restriction : null;
   const h2 = t.match(/<div class="six columns">\s*<h2>([\s\S]*?)<\/h2>/);
   const desc = t.match(/<div class="description">([\s\S]*?)<\/div>/);
   const people = [...(t.match(/<span class="title people">[\s\S]*?<\/li>/)?.[0] ?? '').matchAll(/class="tag">([\s\S]*?)<\/a>/g)].map((m) => clean(m[1]));
@@ -118,6 +123,7 @@ for (const id of ids) {
     rights: {
       basis: 'Transcription by Women\'s Worlds in Qajar Iran (Harvard University), used locally for research. WWQI permits teaching and individual research; redistribution needs Harvard\'s permission, so this record is not published.',
       transcription: 'wwqi',
+      holderTerms,
     },
     tags: [],
     enabled: true,
