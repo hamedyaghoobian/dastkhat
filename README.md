@@ -34,7 +34,7 @@ https://hamedyaghoobian.com/dastkhat/.
 | Shaping: joining forms, lām-alef, mark positions (HarfBuzz, WASM) | `app/src/engine/shaper.ts` |
 | Two scripts (`app/src/engine/script.ts`). **Nasta'liq** (the default), the hand real Persian letters were written in, from Noto Nastaliq Urdu; **naskh**, upright and rounder, from Vazirmatn Thin. Each is loaded only when a hand uses it | `app/src/engine/script.ts`, `shaper.ts` |
 | Single-line skeletons for the glyphs: rasterise → Zhang–Suen thinning → spur pruning → tracing; dots kept apart. For nasta'liq, the solid heads of و ف ق م ه get a counter punched first so they trace as small loops, and a compact blob inside a letter is never a dot (the font keeps nuqtas as glyphs of their own) | `tools/skeletonize.mjs` → `app/src/engine/data/skeletons*.json` |
-| A seed becomes a writer, with correlated traits (hurry → untidier, more dashes for dots). A nasta'liq writer also gets a *loose* hand: words that drop toward their left end, a lean, lines that climb to the left, letters squeezed sideways, teeth and bumps rounded off, some nuqtas left out, and a writing size from small and dense to large. These are what separate a quick letter from a copybook | `app/src/engine/hand.ts` |
+| A seed becomes a writer, with correlated traits (hurry → untidier, more dashes for dots). A nasta'liq writer also gets a *loose* hand: words that drop toward their left end, a lean, lines that climb to the left, letters squeezed sideways, teeth and bumps rounded off, some nuqtas left out, and a writing size from small and dense to large. Quicker writers also take up shekasteh habits, decided word by word: sīn and shīn written as one flat line without teeth, and the pen carried on after ا د ذ ر ز ژ و into the next letter through a hairline that swings up into it from below (dots then wait until the word is done). These are what separate a quick letter from a copybook | `app/src/engine/hand.ts` |
 | Layout and stroke order: each connected piece of a word in one movement from the right, then dots, gāf bars and hamzas; two dots as a dash, three as a caret when hurried; one smooth bend per word so joins stay joined; words climbing to the left; last word squeezed into the margin | `app/src/engine/compose.ts` |
 | Pen timing: speed follows curvature (the two-thirds power law), slow at turns and at both ends | `app/src/engine/kinematics.ts` |
 | Ink as a density field (WebGL2): width and ink along each stroke follow the pen's speed, a stop pools, a flick thins; one pen-down is laid once and crossings darken; wet ink dries darker at the rim, edges are a little rough, and Beer–Lambert colour lets the paper's grain show through thin ink. The reed is a broad nib and a dip pen (it runs dry between dips); the fountain pen is round; a ballpoint streaks and skips; graphite catches the paper's tooth. Without WebGL2 a flat renderer is used | `app/src/engine/ink.ts` (`render.ts` is the fallback) |
@@ -93,7 +93,7 @@ to cite) and a link to the item.
 ## Not done yet
 
 - Publishing the WWQI letters, once Harvard agrees (see above).
-- Fuller shekasteh: its extra joins (letters that never join in print running into the next), sīn written as a plain line, and words stacked over each other.
+- Words stacked over each other, as shekasteh writers do at the end of a line, and joins from one word into the next.
 - Hands built from real handwriting samples (e.g. public-domain copybooks) instead of a typeface's skeleton.
 - Downloadable fonts per hand, video and GIF export, and a saved-letters drawer, all of which the original has.
 

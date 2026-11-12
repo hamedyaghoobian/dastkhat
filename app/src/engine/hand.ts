@@ -60,6 +60,8 @@ export type Loose = {
   round: number;    // stroke rounding, in em: small teeth (sīn, the bumps of ب ت ن) melt into the line
   dotDrop: number;  // chance a nuqta is left out
   scale: number;    // writing size (×): small and dense, or large and loose
+  toothless: number; // chance a word's sīn is written as one flat line, without teeth
+  joins: number;    // chance the pen is carried across a non-joining letter into the next (shekasteh)
 };
 
 export type HandOverrides = Partial<Pick<Hand, 'pen' | 'neatness' | 'hurry' | 'size' | 'slant' | 'pressure' | 'style'>> & { ink?: string; xh?: number };
@@ -101,7 +103,7 @@ export function makeHand(seed: string, o: HandOverrides = {}): Hand {
     nibWidth: pen === 'reed' ? r.range(0.085, 0.115) : pen === 'fountain' ? r.range(0.06, 0.085) : pen === 'pencil' ? r.range(0.05, 0.062) : r.range(0.045, 0.056),
     ink: INKS.find((i) => i.id === inkId) ?? INKS[0],
     speed: 0.5 + hurry * 0.7,
-    loose: { cascade: 0, slant: 0, rise: 0, compress: 1, round: 0, dotDrop: 0, scale: 1 },
+    loose: { cascade: 0, slant: 0, rise: 0, compress: 1, round: 0, dotDrop: 0, scale: 1, toothless: 0, joins: 0 },
   };
   // the loose hand: its own stream, so the traits above stay as they were for every seed
   const lr = rng('loose:' + seed);
@@ -113,6 +115,8 @@ export function makeHand(seed: string, o: HandOverrides = {}): Hand {
     round: 0.012 + 0.035 * hurry * lr.range(0.6, 1.2),
     dotDrop: Math.min(0.4, 0.02 + 0.3 * hurry * untidy + lr.range(0, 0.06)),
     scale: lr.range(0.74, 1.08),
+    toothless: Math.min(0.95, 0.08 + 1.1 * hurry * lr.range(0.6, 1.2)),
+    joins: Math.min(0.85, 0.04 + 0.85 * hurry * lr.range(0.5, 1.2)),
   };
   h.loose = loose;
   if (h.style === 'nastaliq' && o.size == null) {

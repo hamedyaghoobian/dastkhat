@@ -31,7 +31,8 @@ export type Page = {
 export type PageOpts = { width: number; margin: { top: number; right: number; bottom: number; left: number }; startTime?: number };
 
 type Pt = [number, number];
-type Path = { pts: Pt[]; glyph: number; comp?: number };
+/** sin: the path belongs to a س or ش (a quick hand writes its teeth as one flat line) */
+type Path = { pts: Pt[]; glyph: number; comp?: number; sin?: boolean };
 
 const dist = (a: Pt, b: Pt) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
@@ -67,7 +68,7 @@ function groupDots(dots: [number, number, number][]): DotGroup[] {
 
 const geomCache = new Map<string, WordGeom>();
 
-function wordGeometry(glyphs: ShapedGlyph[], key: string, SK: SkSet): WordGeom {
+function wordGeometry(glyphs: ShapedGlyph[], key: string, SK: SkSet, text: string): WordGeom {
   const hit = geomCache.get(key);
   if (hit) return hit;
   const paths: Path[] = [];
@@ -81,7 +82,7 @@ function wordGeometry(glyphs: ShapedGlyph[], key: string, SK: SkSet): WordGeom {
       for (const p of sk.paths) {
         const pts: Pt[] = [];
         for (let k = 0; k < p.p.length; k += 2) pts.push([p.p[k] + ox, p.p[k + 1] + oy]);
-        paths.push({ pts, glyph: gi, comp: p.c });
+        paths.push({ pts, glyph: gi, comp: p.c, sin: text[g.cl] === 'س' || text[g.cl] === 'ش' });
       }
       for (const [cx, cy, r] of sk.dots) dotsByGlyph[gi].push([cx + ox, cy + oy, r]);
     }
@@ -120,7 +121,7 @@ function wordGeometry(glyphs: ShapedGlyph[], key: string, SK: SkSet): WordGeom {
 }
 
 /** A quick hand rounds what a careful one draws sharp: resample, then a gentle Gaussian along the stroke (ends kept). */
-function roundOff(pts: Pt[], sigma: number): Pt[] {
+function roundOff(pts: Pt[], sigma: number, fade = 1): Pt[] {
   const total = polyLen(pts);
   if (total < sigma * 4 || pts.length < 3) return pts;
   const step = Math.max(0.5, sigma / 3);
@@ -136,13 +137,32 @@ function roundOff(pts: Pt[], sigma: number): Pt[] {
   for (let j = -k; j <= k; j++) w.push(Math.exp(-0.5 * ((j * step) / sigma) ** 2));
   const out: Pt[] = res.map((p, i) => {
     // fade the smoothing in from both ends so the stroke starts and ends where it did
-    const edge = Math.min(i, res.length - 1 - i) / k;
+    const edge = Math.min(i, res.length - 1 - i) / Math.max(1, k * fade);
     if (edge <= 0) return p;
     let sx = 0, sy = 0, sw = 0;
     for (let j = -k; j <= k; j++) { const q = res[Math.min(res.length - 1, Math.max(0, i + j))]; sx += q[0] * w[j + k]; sy += q[1] * w[j + k]; sw += w[j + k]; }
     const f = Math.min(1, edge);
     return [p[0] + (sx / sw - p[0]) * f, p[1] + (sy / sw - p[1]) * f];
   });
+  return out;
+}
+
+/** The hairline a carried pen draws from the end of one piece into the start of the next: it leaves briefly along
+ *  the stroke it was on, then swings up into the next letter from below and to the right, the way a pen travelling
+ *  leftward enters a tooth or a stem (a cubic, sampled every ~1.5 px, ends excluded). */
+function linkCurve(from: Pt[], to: Pt[]): Pt[] {
+  const a = from[from.length - 1], b = to[0];
+  const pa = from[Math.max(0, from.length - 3)];
+  const d = dist(a, b) || 1;
+  const ua = dist(a, pa) || 1;
+  const c1: Pt = [a[0] + ((a[0] - pa[0]) / ua) * d * 0.25, a[1] + ((a[1] - pa[1]) / ua) * d * 0.25];
+  const c2: Pt = [b[0] + d * 0.18, b[1] + d * 0.42];
+  const n = Math.max(2, Math.ceil(d / 1.5));
+  const out: Pt[] = [];
+  for (let i = 1; i < n; i++) {
+    const t = i / n, u = 1 - t;
+    out.push([u * u * u * a[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * b[0], u * u * u * a[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * b[1]]);
+  }
   return out;
 }
 
@@ -191,7 +211,7 @@ export function compose(
 ): Page {
   const SK = script.sk;
   // a nasta'liq hand writes like a letter, not a copybook (hand.loose); naskh stays upright
-  const loose = script.style === 'nastaliq' ? hand.loose : { cascade: 0, slant: 0, rise: 0, compress: 1, round: 0, dotDrop: 0, scale: 1 };
+  const loose = script.style === 'nastaliq' ? hand.loose : { cascade: 0, slant: 0, rise: 0, compress: 1, round: 0, dotDrop: 0, scale: 1, toothless: 0, joins: 0 };
   const s = hand.size * script.scale / SK.upem;
   const em = hand.size;
   const xh = em * script.xh;
@@ -229,7 +249,10 @@ export function compose(
     for (const w of ws) {
       const wr = rng(`word:${hand.seed}:${wordIndex}:${w}`);
       const glyphs = script.shape(w);
-      const geom = wordGeometry(glyphs, script.style + ':' + w, SK);
+      const geom = wordGeometry(glyphs, script.style + ':' + w, SK, w);
+      // shekasteh habits, decided per word: sīn without teeth, and the pen carried across non-joining letters
+      const toothless = wr.chance(loose.toothless);
+      const joins = loose.joins > 0 && wr.chance(Math.min(1, loose.joins * 1.4));
       let sx = s * hand.stretch * loose.compress * (1 + wr.normal(0, 0.03 * (0.4 + untidy)));
       const sy = s * (1 + wr.normal(0, 0.035 * (0.4 + untidy)));
       let wpx = geom.width * sx;
@@ -246,7 +269,7 @@ export function compose(
         } else newLine();
       }
       const wordY = y - (right - x) * loose.rise + drift(x / (em * 6) + line * 17) * em * hand.baselineDrift * 6 + wr.normal(0, em * 0.02 * (0.3 + untidy));
-      const tilt = hand.wordTilt * (1 + wr.normal(0, 0.4)) + squeeze * 0.35 - loose.cascade * (1 + wr.normal(0, 0.35));
+      const tilt = hand.wordTilt * (1 + wr.normal(0, 0.4)) + squeeze * (script.style === 'nastaliq' ? 0.18 : 0.35) - loose.cascade * (1 + wr.normal(0, 0.35));
       const lean = hand.slant + loose.slant * (1 + wr.normal(0, 0.15));
       const xRight = x;
       const bendAmp = hand.wobble * em * 10;
@@ -329,19 +352,45 @@ export function compose(
 
       let pen: Pt | null = null;
       const joinTol = SK.upem * 0.025;
+      // The last movement of a piece is held back: if the writer carries the pen on (shekasteh), it runs straight
+      // into the next piece through a hairline instead of lifting after ا د ذ ر ز ژ و.
+      let carry: { m: Pt[]; g: number } | null = null;
+      const flush = () => {
+        if (!carry) return;
+        if (pen) lift(dist(pen, carry.m[0]));
+        writeMove(carry.m, 'body', 1, carry.g);
+        pen = carry.m[carry.m.length - 1];
+        carry = null;
+      };
       for (const piece of main) {
-        const moves = orderPaths(piece.paths, joinTol).map((m) => m.map(tf));
+        const paths = toothless ? piece.paths.map((p) => (p.sin ? { ...p, pts: roundOff(p.pts, SK.upem * 0.045, 0.3) } : p)) : piece.paths;
+        const moves = orderPaths(paths, joinTol).map((m) => m.map(tf));
         const g = nextGroup++;
-        for (const m of moves) {
-          if (pen) lift(dist(pen, m[0]));
-          writeMove(m, 'body', 1, g);
-          pen = m[m.length - 1];
+        if (!moves.length) continue;
+        let firstGroup = g;
+        if (carry) {
+          const c: { m: Pt[]; g: number } = carry;
+          const a = c.m[c.m.length - 1], b = moves[0][0];
+          // only a short hop that goes on leftward, the way the hand is already travelling
+          if (joins && wr.chance(loose.joins) && dist(a, b) < em * 0.85 && b[0] < a[0] + em * 0.12 && a[1] - b[1] < em * 0.6) {
+            moves[0] = [...c.m, ...linkCurve(c.m, moves[0]), ...moves[0]];
+            firstGroup = c.g;
+            carry = null;
+          } else flush();
         }
+        moves.forEach((m, i) => {
+          if (i === moves.length - 1) { carry = { m, g: i === 0 ? firstGroup : g }; return; }
+          if (i > 0 || !carry) { if (pen) lift(dist(pen, m[0])); }
+          writeMove(m, 'body', 1, i === 0 ? firstGroup : g);
+          pen = m[m.length - 1];
+        });
         const marks = () => {
           for (const g of piece.dots) { if (pen) lift(dist(pen, tf([g.cx, g.cy]))); writeDots(g, piece.paths); pen = tf([g.cx, g.cy]); }
         };
-        if (wr.chance(hand.dotsAfterWord)) later.push(marks); else marks();
+        // a writer carrying the pen through the word dots it afterwards
+        if (joins || wr.chance(hand.dotsAfterWord)) later.push(marks); else { flush(); marks(); }
       }
+      flush();
       for (const piece of pieces.filter((p) => p.small)) {
         later.push(() => {
           const g = nextGroup++;
