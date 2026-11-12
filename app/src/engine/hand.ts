@@ -1,6 +1,9 @@
-// A seed becomes a writer. Traits are drawn together, not as independent dice: a hurried
-// writer is also a little untidier, writes larger and joins dots into dashes more often.
-import { rng } from './rng';
+// Two hands, each tuned against a real letter rather than rolled from dice:
+//   qajar — a munshi's reed (qalam) in gall ink, as in the Qajar letters of WWQI: heavy, short, wide-spaced lines,
+//           thick horizontals and hairline uprights, about seven words to a line.
+//   note  — a cleric's note in a fine pen, as in the handwritten letters of the 1980s: small, flat, quick,
+//           level lines far apart, a dozen or more words to a line.
+// The seed only varies the small things (which word wavers, where the pen runs dry); the hand stays the same.
 import type { Style } from './script';
 
 export type PenKind = 'reed' | 'fountain' | 'ballpoint' | 'pencil';
@@ -9,28 +12,19 @@ export type Ink = { id: string; name: string; color: string; alpha: number };
 
 export const INKS: Ink[] = [
   { id: 'black', name: 'مرکب سیاه', color: '#1d1a17', alpha: 0.92 },
-  { id: 'gall', name: 'مازو', color: '#3b2a1c', alpha: 0.88 },
-  { id: 'sepia', name: 'قهوه‌ای', color: '#5a3b22', alpha: 0.85 },
-  { id: 'blue', name: 'آبی', color: '#1f3a7a', alpha: 0.9 },
+  { id: 'gall', name: 'مازو', color: '#2e2219', alpha: 0.9 },
   { id: 'blueblack', name: 'آبی‌سیاه', color: '#1b2540', alpha: 0.92 },
-  { id: 'graphite', name: 'مداد', color: '#4a4a4f', alpha: 0.7 },
-];
-
-export const PENS: { id: PenKind; name: string }[] = [
-  { id: 'reed', name: 'قلم نی' },
-  { id: 'fountain', name: 'خودنویس' },
-  { id: 'ballpoint', name: 'خودکار' },
-  { id: 'pencil', name: 'مداد' },
 ];
 
 export type Hand = {
+  id: HandId;
   seed: string;
   size: number;        // px per em
   slant: number;       // shear; positive leans the tops to the left
   neatness: number;    // 0 untidy … 1 neat
   hurry: number;       // 0 slow … 1 hurried
   wordGap: number;     // in em
-  lineGap: number;     // baseline-to-baseline, in em
+  lineGap: number;     // baseline-to-baseline, in em (before the script's own factor)
   baselineDrift: number; // em of slow wander along a line
   wordTilt: number;    // words tend to climb to the left end (radians)
   stretch: number;     // horizontal scale
@@ -40,7 +34,7 @@ export type Hand = {
   dotsAfterWord: number; // chance the dots wait until the whole word is written
   pressure: number;    // 0.6 … 1.4
   pen: PenKind;
-  /** the script the hand writes (letterforms); set from the loaded script */
+  /** the script the hand writes (letterforms) */
   style: Style;
   /** a letter's body height in px (for ink: what counts as a sharp turn, how long a flick is) */
   xh: number;
@@ -48,7 +42,6 @@ export type Hand = {
   nibWidth: number;    // em
   ink: Ink;
   speed: number;       // px per ms at full pace
-  /** How far a nasta'liq hand strays from the book hand toward a quick letter (shekasteh-leaning tahriri). */
   loose: Loose;
 };
 
@@ -59,70 +52,91 @@ export type Loose = {
   compress: number; // letters squeezed sideways (×)
   round: number;    // stroke rounding, in em: small teeth (sīn, the bumps of ب ت ن) melt into the line
   dotDrop: number;  // chance a nuqta is left out
-  scale: number;    // writing size (×): small and dense, or large and loose
+  scale: number;    // unused by the tuned hands (kept for the layout code)
   toothless: number; // chance a word's sīn is written as one flat line, without teeth
   joins: number;    // chance the pen is carried across a non-joining letter into the next (shekasteh)
 };
 
-export type HandOverrides = Partial<Pick<Hand, 'pen' | 'neatness' | 'hurry' | 'size' | 'slant' | 'pressure' | 'style'>> & { ink?: string; xh?: number };
+export type HandId = 'qajar' | 'note';
 
-export function makeHand(seed: string, o: HandOverrides = {}): Hand {
-  const r = rng('hand:' + seed);
-  const hurry = o.hurry ?? Math.min(1, Math.max(0, r.normal(0.45, 0.22)));
-  const neatness = o.neatness ?? Math.min(1, Math.max(0, r.normal(0.72 - hurry * 0.35, 0.16)));
-  const pen: PenKind = o.pen ?? r.pick(['reed', 'fountain', 'fountain', 'ballpoint', 'ballpoint', 'pencil'] as const);
-  const untidy = 1 - neatness;
-  const inkByPen: Record<PenKind, string[]> = {
-    reed: ['black', 'gall', 'sepia'],
-    fountain: ['blueblack', 'blue', 'black', 'gall'],
-    ballpoint: ['blue', 'blue', 'black'],
-    pencil: ['graphite'],
-  };
-  const inkId = o.ink ?? r.pick(inkByPen[pen]);
-  const h: Hand = {
+type Preset = Omit<Hand, 'seed' | 'xh' | 'size' | 'ink' | 'id'> & {
+  name: string;
+  about: string;
+  ink: string;
+  /** em in px for a 576 px line (the sheet at its widest); scaled with the sheet */
+  em: number;
+};
+
+export const HANDS: Record<HandId, Preset> = {
+  qajar: {
+    name: 'قلم نی، قاجاری',
+    about: 'دست منشی با قلم نی و مرکب مازو، به شیوهٔ نامه‌های دورهٔ قاجار.',
+    em: 35,             // the scan is a narrow slip (7 words a line); on a full sheet the same hand fits about 9
+    style: 'nastaliq',
+    pen: 'reed',
+    ink: 'gall',
+    nibAngle: 1.2,      // a reed held steep for nasta'liq: thick across, hairline down
+    nibWidth: 0.11,
+    pressure: 1.1,
+    slant: 0,
+    neatness: 0.6,
+    hurry: 0.45,
+    wordGap: 0.16,
+    lineGap: 1.4,
+    baselineDrift: 0.03,
+    wordTilt: 0.02,
+    stretch: 1,
+    wobble: 0.006,
+    dotDash: 0.75,
+    dotCaret: 0.7,
+    dotsAfterWord: 0.5,
+    speed: 0.6,
+    loose: { cascade: 0.07, slant: 0.03, rise: 0.0015, compress: 0.7, round: 0.02, dotDrop: 0.06, scale: 1, toothless: 0.4, joins: 0.25 },
+  },
+  note: {
+    name: 'خودنویس، یادداشت',
+    about: 'دستی ریز و تند با خودنویس نوک‌باریک، به شیوهٔ یادداشت‌های دست‌نویس سدهٔ چهاردهم.',
+    em: 14,
+    style: 'nastaliq',
+    pen: 'fountain',
+    ink: 'blueblack',
+    nibAngle: 1.2,
+    nibWidth: 0.07,
+    pressure: 0.95,
+    slant: 0,
+    neatness: 0.7,
+    hurry: 0.7,
+    wordGap: 0.28,
+    lineGap: 2.8,
+    baselineDrift: 0.02,
+    wordTilt: 0.01,
+    stretch: 1.1,       // flat and drawn out
+    wobble: 0.004,
+    dotDash: 0.9,
+    dotCaret: 0.85,
+    dotsAfterWord: 0.7,
+    speed: 0.9,
+    loose: { cascade: 0.012, slant: 0.02, rise: 0.0012, compress: 1, round: 0.035, dotDrop: 0.12, scale: 1, toothless: 0.75, joins: 0.4 },
+  },
+};
+
+export const HAND_IDS = Object.keys(HANDS) as HandId[];
+
+export function isHandId(x: string | undefined): x is HandId {
+  return !!x && x in HANDS;
+}
+
+/** lineWidth: the sheet's writing width in px (the hand keeps its words per line on any screen) */
+export function makeHand(id: HandId, seed: string, lineWidth = 576, xhShare = 0.32): Hand {
+  const { name: _n, about: _a, em, ink, loose, ...p } = HANDS[id];
+  const size = em * Math.max(0.6, Math.min(1.25, lineWidth / 576));
+  return {
+    ...p,
+    id,
     seed,
-    size: o.size ?? r.range(30, 40) * (1 + hurry * 0.1),
-    slant: o.slant ?? r.normal(0.04, 0.07),
-    neatness,
-    hurry,
-    wordGap: r.range(0.22, 0.42),
-    lineGap: r.range(1.55, 1.95),
-    baselineDrift: 0.02 + untidy * r.range(0.04, 0.1),
-    wordTilt: r.normal(0.025, 0.02) + hurry * 0.02,
-    stretch: r.range(0.9, 1.12),
-    wobble: 0.004 + untidy * r.range(0.01, 0.025),
-    dotDash: Math.min(0.97, 0.15 + hurry * 0.7 + r.range(0, 0.2)),
-    dotCaret: Math.min(0.95, 0.1 + hurry * 0.6 + r.range(0, 0.25)),
-    dotsAfterWord: r.range(0.2, 0.9),
-    pressure: o.pressure ?? r.range(0.75, 1.25),
-    pen,
-    style: o.style ?? 'nastaliq',
-    xh: 0,
-    nibAngle: r.range(0.9, 1.25), // about 50°–70°, the way a reed is held for naskh
-    // line widths as a share of the letter size: a reed's full width, a fountain or ballpoint's line, a pencil's
-    nibWidth: pen === 'reed' ? r.range(0.085, 0.115) : pen === 'fountain' ? r.range(0.06, 0.085) : pen === 'pencil' ? r.range(0.05, 0.062) : r.range(0.045, 0.056),
-    ink: INKS.find((i) => i.id === inkId) ?? INKS[0],
-    speed: 0.5 + hurry * 0.7,
-    loose: { cascade: 0, slant: 0, rise: 0, compress: 1, round: 0, dotDrop: 0, scale: 1, toothless: 0, joins: 0 },
+    size,
+    xh: size * xhShare,
+    ink: INKS.find((i) => i.id === ink) ?? INKS[0],
+    loose: { ...loose },
   };
-  // the loose hand: its own stream, so the traits above stay as they were for every seed
-  const lr = rng('loose:' + seed);
-  const loose: Loose = {
-    cascade: 0.012 + 0.035 * hurry + lr.range(0, 0.02),
-    slant: 0.02 + 0.04 * hurry + lr.range(-0.02, 0.03),
-    rise: lr.range(0, 0.004) + 0.004 * hurry,
-    compress: 1 - (0.04 + 0.2 * hurry) * lr.range(0.4, 1),
-    round: 0.012 + 0.035 * hurry * lr.range(0.6, 1.2),
-    dotDrop: Math.min(0.4, 0.02 + 0.3 * hurry * untidy + lr.range(0, 0.06)),
-    scale: lr.range(0.74, 1.08),
-    toothless: Math.min(0.95, 0.08 + 1.1 * hurry * lr.range(0.6, 1.2)),
-    joins: Math.min(0.85, 0.04 + 0.85 * hurry * lr.range(0.5, 1.2)),
-  };
-  h.loose = loose;
-  if (h.style === 'nastaliq' && o.size == null) {
-    h.size *= loose.scale;
-    h.wordGap *= 0.75 + 0.25 * loose.compress; // dense writers leave smaller gaps
-  }
-  h.xh = o.xh ?? h.size * 0.45;
-  return h;
 }

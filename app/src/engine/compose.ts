@@ -259,7 +259,7 @@ export function compose(
       const sy = s * (1 + wr.normal(0, 0.035 * (0.4 + untidy)));
       let wpx = geom.width * sx;
       // Persian words sit close, but never touch: a word ending in a free letter (ا د ر و …) needs a visible gap
-      const gap = em * Math.max(0.2, hand.wordGap * (1 + wr.normal(0, 0.22)));
+      const gap = em * Math.max(0.1, hand.wordGap * (1 + wr.normal(0, 0.22)));
       // the last word on a line: squeeze it in and let it climb, the way letters run into the margin
       let squeeze = 0;
       if (x - wpx < leftEdge && x < right - em) {

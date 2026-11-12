@@ -11,7 +11,7 @@ export default function App() {
   const route = useRoute();
   const [script, setScript] = useState<Script | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const style: Style = route.name === 'letter' && route.params.style === 'naskh' ? 'naskh' : 'nastaliq';
+  const style: Style = 'nastaliq'; // both hands write nasta'liq; the naskh skeletons stay for the coverage check
 
   useEffect(() => {
     let live = true;

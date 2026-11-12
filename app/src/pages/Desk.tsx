@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Sheet, type SheetHandle } from '../components/Sheet';
 import { ReplySheet } from '../components/ReplySheet';
 import { compose } from '../engine/compose';
-import { INKS, PENS, makeHand, type HandOverrides, type PenKind } from '../engine/hand';
-import { newSeed, seedName } from '../engine/rng';
+import { HANDS, HAND_IDS, isHandId, makeHand } from '../engine/hand';
+import { newSeed } from '../engine/rng';
 import { normalisePersian } from '../engine/shaper';
-import { STYLES, type Script } from '../engine/script';
+import type { Script } from '../engine/script';
 import { LETTERS, byId, excerpt, faNum, pickNext, rightsNote } from '../lib/letters';
 import { MARGIN, PAPERS, exportPNG, type PaperId } from '../lib/paper';
 import { navigate, type Route } from '../lib/route';
@@ -34,13 +34,8 @@ function useSheetWidth() {
 export function Desk({ route, script }: Props) {
   const letter = byId(route.id) ?? LETTERS[0];
   const seed = route.params.w || 'baran-roshan-17';
+  const handId = isHandId(route.params.h) ? route.params.h : 'qajar';
   const paper = (route.params.paper as PaperId) || 'ivory';
-  const overrides: HandOverrides = useMemo(() => ({
-    pen: (route.params.pen as PenKind) || undefined,
-    ink: route.params.ink || undefined,
-    neatness: route.params.neat ? +route.params.neat : undefined,
-    hurry: route.params.hurry ? +route.params.hurry : undefined,
-  }), [route.params.pen, route.params.ink, route.params.neat, route.params.hurry]);
   const [pace, setPace] = useState(3);
   const [progress, setProgress] = useState(0);
   const [replying, setReplying] = useState(false);
@@ -49,11 +44,7 @@ export function Desk({ route, script }: Props) {
   const [wrapRef, width] = useSheetWidth();
   const replyRef = useRef<HTMLDivElement>(null);
 
-  const hand = useMemo(() => {
-    const h = makeHand(seed, { ...overrides, style: script.style });
-    const size = h.size * Math.min(1, Math.max(0.62, width / 700));
-    return { ...h, size, xh: size * script.xh };
-  }, [seed, overrides, width, script]);
+  const hand = useMemo(() => makeHand(handId, seed, width - MARGIN.left - MARGIN.right, script.xh), [handId, seed, width, script]);
 
   const { text, cut } = useMemo(() => excerpt(letter.text), [letter]);
   const page = useMemo(() => compose(normalisePersian(text), hand, script, { width, margin: MARGIN }), [text, hand, script, width]);
@@ -66,9 +57,9 @@ export function Desk({ route, script }: Props) {
   const another = useCallback(() => {
     const next = pickNext(letter.id, Math.floor(Math.random() * 1e6));
     setReplying(false);
-    set({ id: next.id, w: newSeed(), pen: undefined, ink: undefined });
+    set({ id: next.id, w: newSeed() });
   }, [letter.id, set]);
-  const otherWriter = useCallback(() => set({ w: newSeed(), pen: undefined, ink: undefined }), [set]);
+  const otherWriter = useCallback(() => set({ h: handId === 'qajar' ? 'note' : undefined, w: newSeed() }), [set, handId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -111,7 +102,7 @@ export function Desk({ route, script }: Props) {
         <div className="panel">
           <div className="btns">
             <button className="btn primary" onClick={another}>نامهٔ دیگر <kbd>R</kbd></button>
-            <button className="btn" onClick={otherWriter}>نویسندهٔ دیگر <kbd>W</kbd></button>
+            <button className="btn" onClick={otherWriter}>دست دیگر <kbd>W</kbd></button>
             {progress < 1
               ? <button className="btn" onClick={() => sheet.current?.finish()}>یکجا بنویس <kbd>Space</kbd></button>
               : <button className="btn" onClick={() => sheet.current?.replay()}>دوباره بنویس</button>}
@@ -136,34 +127,15 @@ export function Desk({ route, script }: Props) {
         </div>
 
         <div className="panel">
-          <h3 style={{ marginTop: 0 }}>نویسنده: {seedName(seed)}</h3>
-          <h3>شیوه</h3>
-          <div className="seg" role="group" aria-label="شیوهٔ خط">
-            {STYLES.map((st) => <button key={st.id} aria-pressed={script.style === st.id} onClick={() => set({ style: st.id === 'nastaliq' ? undefined : st.id })}>{st.name}</button>)}
+          <h3 style={{ marginTop: 0 }}>دست</h3>
+          <div className="seg" role="group" aria-label="دست">
+            {HAND_IDS.map((id) => <button key={id} aria-pressed={handId === id} onClick={() => set({ h: id === 'qajar' ? undefined : id })}>{HANDS[id].name}</button>)}
           </div>
-          <h3>قلم</h3>
-          <div className="seg" role="group" aria-label="قلم">
-            {PENS.map((p) => <button key={p.id} aria-pressed={hand.pen === p.id} onClick={() => set({ pen: p.id, ink: undefined })}>{p.name}</button>)}
-          </div>
-          <h3>مرکب</h3>
-          <div className="seg" role="group" aria-label="مرکب">
-            {INKS.map((i) => (
-              <button key={i.id} aria-pressed={hand.ink.id === i.id} onClick={() => set({ ink: i.id })}>
-                <span aria-hidden style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 5, background: i.color, marginInlineEnd: 6 }} />{i.name}
-              </button>
-            ))}
-          </div>
+          <p className="hint" style={{ margin: '6px 0 0' }}>{HANDS[handId].about}</p>
           <h3>کاغذ</h3>
           <div className="seg" role="group" aria-label="کاغذ">
             {PAPERS.map((p) => <button key={p.id} aria-pressed={paper === p.id} onClick={() => set({ paper: p.id })}>{p.name}</button>)}
           </div>
-          <h3>دست</h3>
-          <label className="slider">نظم
-            <input type="range" min={0} max={1} step={0.05} value={hand.neatness} onChange={(e) => set({ neat: e.target.value }, true)} />
-          </label>
-          <label className="slider">شتاب
-            <input type="range" min={0} max={1} step={0.05} value={hand.hurry} onChange={(e) => set({ hurry: e.target.value }, true)} />
-          </label>
           <h3>سرعت نوشتن</h3>
           <div className="seg" role="group" aria-label="سرعت نوشتن">
             {PACES.map((p) => <button key={p.v} aria-pressed={pace === p.v} onClick={() => setPace(p.v)}>{p.name}</button>)}

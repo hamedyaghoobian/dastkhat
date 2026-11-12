@@ -15,7 +15,7 @@ export const MARGIN = { top: 48, right: 56, bottom: 48, left: 48 };
 /** Where the rules fall for this writer (they don't always keep to them). */
 export function ruleYs(hand: Hand, height: number) {
   const ys: number[] = [];
-  for (let y = MARGIN.top + hand.size * 1.1 + hand.size * 0.12; y < height - 10; y += hand.size * hand.lineGap) ys.push(y);
+  for (let y = MARGIN.top + hand.size * 1.1 + hand.size * 0.12; y < height - 10; y += hand.size * hand.lineGap * 1.3) ys.push(y); // 1.3: the nasta'liq script's own line factor (script.ts)
   return ys;
 }
 

@@ -1,5 +1,5 @@
 // Hash routes, so the site works from any static host and offline:
-//   #/letter/<id>?w=<writer seed>&pen=&ink=&paper=&neat=&hurry=
+//   #/letter/<id>?h=<hand: qajar|note>&w=<seed>&paper=
 //   #/letters   #/read/<id>   #/about
 import { useEffect, useState } from 'react';
 
