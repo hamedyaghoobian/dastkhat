@@ -108,9 +108,9 @@ export function makeHand(seed: string, o: HandOverrides = {}): Hand {
   // the loose hand: its own stream, so the traits above stay as they were for every seed
   const lr = rng('loose:' + seed);
   const loose: Loose = {
-    cascade: 0.03 + 0.1 * hurry + lr.range(0, 0.07),
-    slant: 0.05 + 0.09 * hurry + lr.range(-0.03, 0.07),
-    rise: lr.range(0, 0.012) + 0.01 * hurry,
+    cascade: 0.012 + 0.035 * hurry + lr.range(0, 0.02),
+    slant: 0.02 + 0.04 * hurry + lr.range(-0.02, 0.03),
+    rise: lr.range(0, 0.004) + 0.004 * hurry,
     compress: 1 - (0.04 + 0.2 * hurry) * lr.range(0.4, 1),
     round: 0.012 + 0.035 * hurry * lr.range(0.6, 1.2),
     dotDrop: Math.min(0.4, 0.02 + 0.3 * hurry * untidy + lr.range(0, 0.06)),

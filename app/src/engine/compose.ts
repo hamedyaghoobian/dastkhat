@@ -211,6 +211,8 @@ export function compose(
 ): Page {
   const SK = script.sk;
   // a nasta'liq hand writes like a letter, not a copybook (hand.loose); naskh stays upright
+  // nasta'liq: the real letters keep level lines and steady words, so a nasta'liq hand tilts, leans and wanders less
+  const calm = script.style === 'nastaliq' ? 0.4 : 1;
   const loose = script.style === 'nastaliq' ? hand.loose : { cascade: 0, slant: 0, rise: 0, compress: 1, round: 0, dotDrop: 0, scale: 1, toothless: 0, joins: 0 };
   const s = hand.size * script.scale / SK.upem;
   const em = hand.size;
@@ -268,9 +270,9 @@ export function compose(
           wpx = geom.width * sx;
         } else newLine();
       }
-      const wordY = y - (right - x) * loose.rise + drift(x / (em * 6) + line * 17) * em * hand.baselineDrift * 6 + wr.normal(0, em * 0.02 * (0.3 + untidy));
-      const tilt = hand.wordTilt * (1 + wr.normal(0, 0.4)) + squeeze * (script.style === 'nastaliq' ? 0.18 : 0.35) - loose.cascade * (1 + wr.normal(0, 0.35));
-      const lean = hand.slant + loose.slant * (1 + wr.normal(0, 0.15));
+      const wordY = y - (right - x) * loose.rise + drift(x / (em * 6) + line * 17) * em * hand.baselineDrift * 6 * calm + wr.normal(0, em * 0.02 * (0.3 + untidy));
+      const tilt = hand.wordTilt * calm * (1 + wr.normal(0, 0.3)) + squeeze * (script.style === 'nastaliq' ? 0.1 : 0.35) - loose.cascade * (1 + wr.normal(0, 0.2));
+      const lean = hand.slant * calm + loose.slant * (1 + wr.normal(0, 0.15));
       const xRight = x;
       const bendAmp = hand.wobble * em * 10;
       const tf = (p: Pt): Pt => {
@@ -372,7 +374,10 @@ export function compose(
           const c: { m: Pt[]; g: number } = carry;
           const a = c.m[c.m.length - 1], b = moves[0][0];
           // only a short hop that goes on leftward, the way the hand is already travelling
-          if (joins && wr.chance(loose.joins) && dist(a, b) < em * 0.85 && b[0] < a[0] + em * 0.12 && a[1] - b[1] < em * 0.6) {
+          // an alef ends on a straight vertical (down, or up when attached); joining out of it curls into a loop that reads as another letter
+          const pa = c.m[Math.max(0, c.m.length - 4)];
+          const fromAlef = Math.abs(a[1] - pa[1]) > Math.abs(a[0] - pa[0]) * 1.5;
+          if (joins && !fromAlef && wr.chance(loose.joins) && dist(a, b) < em * 0.85 && b[0] < a[0] + em * 0.12 && a[1] - b[1] < em * 0.5) {
             moves[0] = [...c.m, ...linkCurve(c.m, moves[0]), ...moves[0]];
             firstGroup = c.g;
             carry = null;

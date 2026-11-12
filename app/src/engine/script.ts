@@ -28,7 +28,7 @@ export type Script = {
 };
 
 const FILES: Record<Style, { font: string; sk: () => Promise<{ default: unknown }>; scale: number; xh: number; lineGap: number }> = {
-  nastaliq: { font: 'NotoNastaliqUrdu.ttf', sk: () => import('./data/skeletons-nastaliq.json'), scale: 1.05, xh: 0.32, lineGap: 1.18 },
+  nastaliq: { font: 'NotoNastaliqUrdu.ttf', sk: () => import('./data/skeletons-nastaliq.json'), scale: 1.05, xh: 0.32, lineGap: 1.3 },
   naskh: { font: 'Vazirmatn-Thin.ttf', sk: () => import('./data/skeletons.json'), scale: 1, xh: 0.45, lineGap: 1 },
 };
 
