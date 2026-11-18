@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite the piece as below."
+title: "What the Hand Gives Back: code and data"
+type: software
+authors:
+  - family-names: Yaghoobian
+    given-names: Hamed
+date-released: 2026-11-12
+license: MIT
+url: "https://hamedyaghoobian.com/readings-otherwise/what-the-hand-gives-back/"
+repository-code: "https://github.com/hamedyaghoobian/dastkhat"
+preferred-citation:
+  type: art
+  title: "What the Hand Gives Back"
+  authors:
+    - family-names: Yaghoobian
+      given-names: Hamed
+  year: 2026
+  month: 11
+  collection-title: "Readings, Otherwise"
+  issue: "6"
+  medium: "Interactive work"
+  url: "https://hamedyaghoobian.com/readings-otherwise/what-the-hand-gives-back/"
+  license: CC-BY-4.0

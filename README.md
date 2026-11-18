@@ -106,3 +106,16 @@ to cite) and a link to the item.
 - HarfBuzz / harfbuzzjs, MIT.
 - Letters: Ganjoor, via Wikidorj. Public-domain texts. Locally, Women's Worlds in Qajar Iran, Harvard University (not redistributed).
 - Idea, and the ink model and pen kinematics (ported and adapted): *If This Finds You* by Rafael Cespedes, MIT (`app/public/licenses/if-this-finds-you.txt`).
+
+## Licence and how to cite
+
+- **Code**: MIT (`LICENSE`).
+- **The piece** (its words, drawings, data and design, as published at https://hamedyaghoobian.com/readings-otherwise/what-the-hand-gives-back/): [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Use it, change it, teach with it; say where it came from.
+- **What comes from elsewhere keeps its own terms:**
+  - The fonts, the letters and the ported ink model keep the licences listed under Credits and licences above.
+
+To cite it:
+
+> Yaghoobian, Hamed. 2026. "What the Hand Gives Back." *Readings, Otherwise*, no. 6. Interactive work, 12 November 2026. https://hamedyaghoobian.com/readings-otherwise/what-the-hand-gives-back/
+
+`CITATION.cff` has the same, and GitHub's "Cite this repository" reads it. It was made with Claude, a language model, as its colophon says.
